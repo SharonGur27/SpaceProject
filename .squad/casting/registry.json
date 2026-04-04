@@ -1,0 +1,36 @@
+{
+  "entries": [
+    {
+      "persistent_name": "Han",
+      "role": "Lead",
+      "universe": "Star Wars",
+      "created_at": "2026-04-02T15:09:43Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Leia",
+      "role": "Frontend Dev",
+      "universe": "Star Wars",
+      "created_at": "2026-04-02T15:09:43Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Chewie",
+      "role": "ML/Audio Engineer",
+      "universe": "Star Wars",
+      "created_at": "2026-04-02T15:09:43Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Lando",
+      "role": "Tester",
+      "universe": "Star Wars",
+      "created_at": "2026-04-02T15:09:43Z",
+      "legacy_named": false,
+      "status": "active"
+    }
+  ]
+}
