@@ -43,3 +43,38 @@
 - The fallback will be automatically used by `emotion-detector.js` if the ML model can't load
 - Implication for Phase 2 `app.js` wiring: No changes needed — `emotion-detector.js` handles the swap automatically
 - Feature order is locked: [pitch, pitchVar, energy, centroid, zcr, speechRate] — ensure Chewie's features match this order
+
+### Phase 2 Complete — Integration Layer Built (2026-04-07)
+
+**Delivered Files:**
+- `src/js/dekel-brain.js` — Rule-based response generator with emotion-appropriate templates. High/medium confidence tiers, low-confidence fallback to gentle check-ins. Responses are 2-3 sentences max, supportive tone.
+- `src/js/ui.js` — UI controller managing all DOM interactions. Status colors (green/blue/orange/purple), emotion emojis (😌😰😊😔❓), talk button toggle mode, transcript/response display, fallback text input.
+- `src/js/app.js` — Main orchestrator wiring all Phase 1 modules. Full conversation flow: button → mic+STT+features → user speaks → stop → emotion detection → brain response → TTS. Handles AnalyserNode creation and connection, error handling at each step, cleanup on stop.
+- `src/index.html` — Complete UI markup with TensorFlow.js CDN, semantic HTML, accessibility attributes (aria-live, aria-label), fallback text input for browsers without Web Speech API.
+- `src/css/styles.css` — Space-themed design with animated stars background, dark gradient (deep blue/purple), calming colors, responsive layout, accessibility features (reduced-motion support, focus-visible styles).
+
+**Architecture Decisions:**
+- **AnalyserNode wiring:** app.js creates analyser from mic's AudioContext, connects sourceNode → analyser (no destination to avoid feedback), passes to audio-features.init()
+- **Confidence thresholds in brain:** High ≥0.65, Medium ≥0.45, Low <0.45 triggers uncertain responses
+- **Status flow:** ready → listening → processing → speaking → ready
+- **Error handling:** Each module (mic, STT, TTS) has error callbacks wired to UI feedback
+- **TTS/mic coordination:** TTS onStart/onEnd handlers update status; mic stopped before TTS to avoid feedback
+- **Button UX:** Toggle mode (press to start, press again to stop), disabled during processing/speaking
+
+**Key Patterns:**
+- All modules use both default and named exports for flexibility
+- Console logs at each step for debugging visibility
+- Graceful degradation: text input fallback if Web Speech API unavailable
+- Automatic fallback: emotion-detector switches to rule-based if TF model can't load
+
+**Integration Points Verified:**
+- Feature order: [pitch, pitchVar, energy, centroid, zcr, speechRate] ✓
+- Emotion labels: calm, stressed, happy, sad, neutral ✓
+- Confidence scoring: 0-1 range, model threshold 0.55, uncertain flag 0.40 ✓
+- TTS emotion presets: calm, stressed, happy, sad, neutral (pitch/rate adjustments) ✓
+
+**User Experience:**
+- Simple enough for a child to understand (one button, clear status, emoji emotions)
+- Calming space theme reduces anxiety
+- Supportive responses tailored to astronaut context
+- Accessible (keyboard nav, screen reader support, reduced motion)

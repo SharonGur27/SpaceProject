@@ -11,6 +11,7 @@ How to decide who handles what.
 | Audio processing & ML | Chewie | Emotion detection, audio features, TensorFlow.js models |
 | Code review | Han | Review PRs, check quality, suggest improvements |
 | Testing & QA | Lando | Write tests, find edge cases, verify fallbacks |
+| Process docs & narrative | Wedge | Decision logs, build story, educational explainers |
 | Scope & priorities | Han | What to build next, trade-offs, decisions |
 | Session logging | Scribe | Automatic — never needs routing |
 

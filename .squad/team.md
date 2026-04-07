@@ -16,6 +16,7 @@
 | Leia | Frontend Dev | .squad/agents/leia/charter.md | ⚛️ Active |
 | Chewie | ML/Audio Engineer | .squad/agents/chewie/charter.md | 🔬 Active |
 | Lando | Tester | .squad/agents/lando/charter.md | 🧪 Active |
+| Wedge | Process Documenter | .squad/agents/wedge/charter.md | 📝 Active |
 | Scribe | Session Logger | .squad/agents/scribe/charter.md | 📋 Active |
 | Ralph | Work Monitor | .squad/agents/ralph/charter.md | 🔄 Active |
 

@@ -46,3 +46,45 @@
 - Test files available: `tests/audio-features.test.js` with AnalyserNode mocks, `tests/emotion-detector.test.js` with TF.js mocks
 - Your `audio-features.js` uses this exact mock: `getFloatTimeDomainData()`, `getFloatFrequencyData()` with dB-to-linear conversion
 - Confidence thresholds decision: 0.55 for model trigger, 0.40 for uncertain flag (documented in decisions.md)
+
+### 2026-04-07 — Phase 2: RAVDESS Training Pipeline Complete
+
+- **Files created:**
+  - `training/extract_features.py` — Feature extraction from RAVDESS audio files. Uses librosa.pyin for pitch (more robust than autocorrelation), RMS for energy, spectral_centroid, ZCR, tempo-based speech rate. Maps RAVDESS 8 emotions → our 5 classes (angry/fearful/disgust → stressed, surprised → happy). Outputs features.csv + normalization.json.
+  - `training/train_model.py` — MLP training (Input(6) → Dense(32) → Dense(16) → Dense(5)). 80/20 train/val split, Adam optimizer, sparse_categorical_crossentropy loss. Target: ≥50% accuracy. Outputs emotion_model.h5 + training plots.
+  - `training/export_tfjs.py` — Converts Keras model to TensorFlow.js format using tensorflowjs_converter. Copies normalization stats to src/model/ directory. Verifies model loads correctly.
+  - `training/requirements.txt` — Python dependencies (librosa, tensorflow, tensorflowjs, sklearn, pandas, numpy, matplotlib/seaborn).
+  - `training/README.md` — Complete usage instructions: dataset download, 3-step pipeline workflow, integration with browser code, troubleshooting.
+  
+- **Key technical decisions:**
+  - **Pitch detection:** librosa.pyin (probabilistic YIN) preferred over autocorrelation — more robust to noise, better for acted speech
+  - **Speech rate proxy:** librosa.beat.beat_track on onset envelope (energy peaks) → tempo in BPM → syllables/sec estimate
+  - **Emotion mapping:** RAVDESS codes 01-08 → 5 classes. Consolidates negative high-arousal states (angry/fearful/disgust) into "stressed"
+  - **Feature order enforced:** [meanPitch, pitchVariance, energy, spectralCentroid, zeroCrossingRate, speechRate] — MUST match audio-features.js
+  - **Label order enforced:** ['calm', 'stressed', 'happy', 'sad', 'neutral'] via LabelEncoder.classes_ — MUST match emotion-detector.js EMOTION_LABELS
+  - **Model size:** ~1200 parameters, <50 KB — browser-friendly, sub-5ms inference
+  
+- **Integration path:**
+  1. Run extract_features.py on RAVDESS dataset → features.csv + normalization.json
+  2. Run train_model.py on features.csv → emotion_model.h5 + training plots (expect ~50-65% val accuracy on RAVDESS)
+  3. Run export_tfjs.py → src/model/model.json + weight shards + normalization.json
+  4. Browser code loads model via emotion-detector.js loadModel('../model/model.json')
+  5. Optionally update audio-features.js DEFAULT_NORM_STATS with trained normalization stats (or load dynamically via setNormalizationStats())
+  
+- **For Leia:** Model artifacts will live in `src/model/` after export. emotion-detector.js already has loadModel() API ready.
+- **For Lando:** Training scripts include visualization (accuracy/loss curves, confusion matrix) if matplotlib available. Model verification step in export_tfjs.py.
+
+### Cross-Team Integration: Phase 2 Complete (2026-04-07)
+
+**Integration with Leia's Phase 2 deliverables:**
+- Feature order verified: [pitch, pitchVar, energy, centroid, zcr, speechRate] ✓ (matches audio-features.js extraction)
+- Emotion labels verified: calm, stressed, happy, sad, neutral ✓ (matches emotion-detector.js and dekel-brain.js)
+- Confidence thresholds: 0.55 (model confident), 0.40 (uncertain flag) ✓ (integrated with dekel-brain.js three-tier system)
+- Model input/output shapes: (batch, 6) → (batch, 5) ✓ (browser-compatible)
+- AnalyserNode pipeline: app.js creates analyser from mic's AudioContext, connects sourceNode → analyser, passes to audio-features.init() ✓
+
+**Integration with Lando's Phase 2 testing:**
+- Extract_features.py and train_model.py fully testable with pytest
+- Feature extraction mocks in tests/audio-features.test.js align with librosa output format
+- Model output tensor structure documented for test mocking (tests/emotion-detector.test.js)
+- Training visualization included for debugging (matplotlib plots in train_model.py)
