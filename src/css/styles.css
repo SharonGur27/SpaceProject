@@ -1,0 +1,359 @@
+/**
+ * Dekel Styles — Space-Themed UI
+ * 
+ * A calming, space-inspired design that's easy to understand and use.
+ */
+
+/* === Reset & Base === */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0f1419 100%);
+  color: #e0e6ed;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+
+/* === Stars Background Effect === */
+.stars {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.stars::before,
+.stars::after {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 
+    100px 200px #fff,
+    300px 100px #fff,
+    500px 300px #fff,
+    700px 150px #fff,
+    900px 250px #fff,
+    200px 400px #fff,
+    400px 500px #fff,
+    600px 400px #fff,
+    800px 500px #fff,
+    150px 600px #fff,
+    350px 650px #fff,
+    550px 550px #fff,
+    750px 600px #fff,
+    950px 650px #fff;
+  animation: twinkle 3s infinite ease-in-out;
+}
+
+.stars::after {
+  opacity: 0.5;
+  animation-delay: 1.5s;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* === Main Layout === */
+#app {
+  position: relative;
+  z-index: 1;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+h1 {
+  font-size: 3rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 0 20px rgba(100, 150, 255, 0.5);
+}
+
+.subtitle {
+  font-size: 1.25rem;
+  color: #9ca3af;
+  font-weight: 300;
+}
+
+/* === Status Section === */
+.status-section {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+#status {
+  font-size: 1.25rem;
+  font-weight: 500;
+  padding: 0.75rem 1.5rem;
+  border-radius: 2rem;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+/* === Interaction Section === */
+.interaction-section {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.talk-button {
+  font-size: 1.5rem;
+  padding: 1.25rem 3rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 3rem;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  transition: all 0.3s ease;
+  margin-bottom: 1rem;
+}
+
+.talk-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(102, 126, 234, 0.6);
+}
+
+.talk-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.talk-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.talk-button.listening {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 8px 24px rgba(245, 87, 108, 0.4);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(245, 87, 108, 0.8);
+  }
+}
+
+/* Fallback text input */
+.text-fallback {
+  display: flex;
+  gap: 0.75rem;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+#text-input {
+  flex: 1;
+  padding: 0.75rem 1.25rem;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 2rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: #e0e6ed;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+#text-input:focus {
+  border-color: #667eea;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#text-input::placeholder {
+  color: #6b7280;
+}
+
+.submit-button {
+  padding: 0.75rem 1.5rem;
+  background: rgba(102, 126, 234, 0.8);
+  color: white;
+  border: none;
+  border-radius: 2rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.submit-button:hover {
+  background: rgba(102, 126, 234, 1);
+  transform: translateY(-1px);
+}
+
+/* === Content Sections === */
+.transcript-section,
+.emotion-section,
+.response-section {
+  margin-bottom: 2rem;
+}
+
+h2 {
+  font-size: 1.25rem;
+  color: #9ca3af;
+  margin-bottom: 0.75rem;
+  font-weight: 500;
+}
+
+/* === Transcript Box === */
+.transcript-box {
+  background: rgba(30, 40, 70, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  min-height: 100px;
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: #d1d5db;
+}
+
+.transcript-box:empty::before {
+  content: 'Your words will appear here...';
+  color: #6b7280;
+  font-style: italic;
+}
+
+.interim {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* === Emotion Indicator === */
+.emotion-indicator {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.emotion-display {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(30, 40, 70, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3rem;
+  padding: 1rem 2rem;
+}
+
+.emotion-emoji {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.emotion-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.emotion-label {
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.emotion-confidence {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* === Response Box === */
+.response-box {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  min-height: 100px;
+  font-size: 1.25rem;
+  line-height: 1.6;
+  color: #e0e6ed;
+  font-weight: 500;
+}
+
+/* === Footer === */
+footer {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* === Responsive Design === */
+@media (max-width: 640px) {
+  h1 {
+    font-size: 2rem;
+  }
+  
+  .subtitle {
+    font-size: 1rem;
+  }
+  
+  .talk-button {
+    font-size: 1.25rem;
+    padding: 1rem 2rem;
+  }
+  
+  #app {
+    padding: 1.5rem 1rem;
+  }
+  
+  .text-fallback {
+    flex-direction: column;
+  }
+  
+  .emotion-display {
+    padding: 0.75rem 1.5rem;
+  }
+  
+  .emotion-emoji {
+    font-size: 2.5rem;
+  }
+}
+
+/* === Accessibility === */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus styles for keyboard navigation */
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #667eea;
+  outline-offset: 2px;
+}

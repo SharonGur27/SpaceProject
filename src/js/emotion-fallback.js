@@ -20,10 +20,22 @@
  * The rules below encode known prosody–emotion correlations from the speech
  * emotion recognition literature (Scherer 2003, Juslin & Laukka 2003).
  *
+ * Scoring strategy (v2):
+ *   - Each emotion uses a weighted sum + threshold-based bonuses for strong signals
+ *   - Neutral is scored as a bounded residual (never starts above other scores)
+ *   - Softmax temperature = 1.0 for decisive distributions
+ *   - Console diagnostics log raw features, scores, and probabilities
+ *
  * @module emotion-fallback
  */
 
 const EMOTION_LABELS = Object.freeze(['calm', 'stressed', 'happy', 'sad', 'neutral']);
+
+// Softmax temperature — lower = peakier / more decisive distributions
+const TEMPERATURE = 1.0;
+
+// Threshold (in z-score units) for bonus boosts on strong feature signals
+const STRONG_SIGNAL = 0.8;
 
 /**
  * Predict emotion from z-score normalised feature vector using hand-crafted rules.
@@ -38,35 +50,68 @@ export function predictFromFeatures(features) {
 
   const [pitch, pitchVar, energy, centroid, zcr, speechRate] = features;
 
+  console.log('[emotion-fallback] Raw features:', {
+    pitch: _round(pitch), pitchVar: _round(pitchVar), energy: _round(energy),
+    centroid: _round(centroid), zcr: _round(zcr), speechRate: _round(speechRate),
+  });
+
   // ── Compute a raw "score" for each emotion ────────────────────────────
-  // Each score is a weighted sum of how well the features match the known
-  // prosody profile for that emotion. Weights are hand-tuned heuristics.
+  // Weighted sums use stronger weights than v1 (0.3-0.5 vs 0.1-0.3).
+  // Threshold bonuses add +0.3 when a key feature is strongly in the
+  // expected direction, so even moderate z-scores can trigger a clear win.
+
+  let calmScore =
+    (-pitch * 0.4) + (-pitchVar * 0.4) + (-energy * 0.2) +
+    (-speechRate * 0.3) + (-zcr * 0.2) + (-centroid * 0.1);
+  // Bonus: if pitch AND energy are both clearly low → calm
+  if (pitch < -STRONG_SIGNAL && energy < -STRONG_SIGNAL) calmScore += 0.4;
+  if (speechRate < -STRONG_SIGNAL) calmScore += 0.2;
+
+  let stressedScore =
+    (pitch * 0.35) + (pitchVar * 0.2) + (energy * 0.4) +
+    (centroid * 0.15) + (zcr * 0.2) + (speechRate * 0.2);
+  // Bonus: high energy + high pitch = strong stress signal
+  if (energy > STRONG_SIGNAL && pitch > STRONG_SIGNAL) stressedScore += 0.4;
+  if (zcr > STRONG_SIGNAL) stressedScore += 0.2;
+
+  let happyScore =
+    (pitch * 0.35) + (pitchVar * 0.4) + (energy * 0.3) +
+    (speechRate * 0.15) + (centroid * 0.15) + (-zcr * 0.05);
+  // Bonus: high pitch variance is the hallmark of expressive/happy speech
+  if (pitchVar > STRONG_SIGNAL && energy > 0) happyScore += 0.4;
+  if (pitch > STRONG_SIGNAL && pitchVar > STRONG_SIGNAL) happyScore += 0.2;
+
+  let sadScore =
+    (-pitch * 0.35) + (-pitchVar * 0.3) + (-energy * 0.45) +
+    (-speechRate * 0.3) + (-centroid * 0.15);
+  // Bonus: low energy is the strongest cue for sad speech
+  if (energy < -STRONG_SIGNAL && speechRate < -STRONG_SIGNAL) sadScore += 0.4;
+  if (pitch < -STRONG_SIGNAL && energy < -STRONG_SIGNAL) sadScore += 0.2;
+
+  // NEUTRAL: small residual score — only wins when nothing else is strong.
+  // Max of 0.3 at perfectly zero features; drops fast as features deviate.
+  const totalDeviation =
+    Math.abs(pitch) + Math.abs(pitchVar) + Math.abs(energy) +
+    Math.abs(centroid) + Math.abs(zcr) + Math.abs(speechRate);
+  let neutralScore = Math.max(0, 0.3 - totalDeviation * 0.12);
 
   const scores = {
-    // CALM: low pitch, low variance, moderate energy, slow rate, low ZCR
-    calm:     _clamp((-pitch * 0.3) + (-pitchVar * 0.3) + (-energy * 0.1) + (-speechRate * 0.2) + (-zcr * 0.1)),
-
-    // STRESSED: high pitch, high variance, high energy, fast rate, high ZCR, bright voice
-    stressed: _clamp((pitch * 0.2) + (pitchVar * 0.15) + (energy * 0.25) + (centroid * 0.1) + (zcr * 0.15) + (speechRate * 0.15)),
-
-    // HAPPY: higher pitch, high variance, moderate-high energy, moderate rate
-    happy:    _clamp((pitch * 0.2) + (pitchVar * 0.25) + (energy * 0.2) + (speechRate * 0.1) + (-zcr * 0.05) + (centroid * 0.1)),
-
-    // SAD: low pitch, low variance, low energy, slow rate
-    sad:      _clamp((-pitch * 0.2) + (-pitchVar * 0.2) + (-energy * 0.3) + (-speechRate * 0.2) + (-centroid * 0.1)),
-
-    // NEUTRAL: everything near zero (small absolute deviations)
-    neutral:  _clamp(1.0 - (Math.abs(pitch) * 0.2 + Math.abs(pitchVar) * 0.2 + Math.abs(energy) * 0.2 + Math.abs(speechRate) * 0.2 + Math.abs(zcr) * 0.1 + Math.abs(centroid) * 0.1)),
+    calm:     calmScore,
+    stressed: stressedScore,
+    happy:    happyScore,
+    sad:      sadScore,
+    neutral:  neutralScore,
   };
 
-  // ── Softmax-like normalisation ────────────────────────────────────────
-  // Convert raw scores to probabilities that sum to 1.
-  // We exponentiate to ensure non-negative values and sharpen differences.
+  console.log('[emotion-fallback] Raw scores:', Object.fromEntries(
+    EMOTION_LABELS.map(l => [l, _round(scores[l])])
+  ));
+
+  // ── Softmax normalisation ─────────────────────────────────────────────
   const expScores = {};
   let expSum = 0;
   for (const label of EMOTION_LABELS) {
-    // Temperature of 2.0 keeps probabilities from being too peaked
-    expScores[label] = Math.exp(scores[label] * 2.0);
+    expScores[label] = Math.exp(scores[label] / TEMPERATURE);
     expSum += expScores[label];
   }
 
@@ -84,6 +129,9 @@ export function predictFromFeatures(features) {
 
   const confidence = maxProb;
 
+  console.log('[emotion-fallback] Probabilities:', allScores, '→', maxLabel,
+    `(${_round(confidence)})`);
+
   // Apply the same confidence thresholds as the ML model
   if (confidence >= 0.55) {
     return { emotion: maxLabel, confidence, allScores };
@@ -96,9 +144,9 @@ export function predictFromFeatures(features) {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Clamp a value to [-1, 1] to keep scores bounded */
-function _clamp(v) {
-  return Math.max(-1, Math.min(1, v));
+/** Round to 3 decimal places for readable logs */
+function _round(v) {
+  return Math.round(v * 1000) / 1000;
 }
 
 /** Default result when features are missing or invalid */

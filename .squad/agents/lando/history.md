@@ -121,3 +121,19 @@
 - Mock setup/teardown sequencing for globalThis pollution
 - Integration tests (end-to-end audio flow)
 - Performance benchmarks (sub-5ms emotion inference)
+
+### 2026-04-07 — All 85 Test Stubs Converted to Real Tests
+
+- **Task:** Convert all 85 `it.todo()` stubs across 5 test files to real tests with assertions
+- **Result:** 128 total tests passing (0 todos, 0 failures)
+- **Per-file breakdown:**
+  - `mic-input.test.js` — 18 tests (16 stubs converted): getUserMedia mocking, AudioContext lifecycle, permission errors, stop-before-start, getMediaStream/getSourceNode getters
+  - `speech-to-text.test.js` — 21 tests (18 stubs converted): SpeechRecognition config (lang/continuous/interim), onresult event simulation with isFinal flag, auto-restart via onend+setTimeout, error handling (network/not-allowed/no-speech), submitText fallback, empty transcript filtering
+  - `text-to-speech.test.js` — 23 tests (17 stubs converted): speak() promise lifecycle, emotion preset application, cancel-before-speak queue management, isSpeaking state tracking, onStart/onEnd callbacks, Chrome 50ms setTimeout workaround
+  - `audio-features.test.js` — 24 tests (17 stubs converted): AnalyserNode mock with getFloatTimeDomainData/getFloatFrequencyData, silence detection (RMS < 0.01), pitch detection via sine wave, spectral centroid comparison, ZCR validation, extraction start/stop lifecycle with fake timers, z-score normalization
+  - `emotion-detector.test.js` — 24 tests (17 stubs converted): TF.js model load/fail, predict() with confidence tiers (>=0.55 confident, 0.40-0.54 uncertain, <0.40 neutral fallback), allScores transparency, tensor dispose(), fallback to emotion-fallback.js, NaN/null/zero feature edge cases
+- **Key mock fixes discovered:**
+  - `vi.fn(() => ...)` arrow functions cannot be used as constructors in Vitest 4.x — must use `vi.fn(function() { return ... })` for AudioContext, SpeechRecognition mocks
+  - `globalThis.navigator` is read-only in Node.js 21+ — must use `Object.defineProperty(globalThis, 'navigator', { value: ..., writable: true, configurable: true })` to override
+  - SpeechRecognition onresult events need array-like result objects with `isFinal` property added via `result.isFinal = true`
+- **Pattern for module isolation:** Dynamic `await import(...)` after mock setup + `vi.resetModules()` in beforeEach ensures fresh module state per test

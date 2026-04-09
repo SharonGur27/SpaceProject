@@ -1,24 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// ──────────────────────────────────────────────────────
-// text-to-speech.js — Text-to-Speech Module Tests
-//
-// Interface under test:
-//   speak(text, options?)  → Promise<void>   // options: { pitch, rate, emotion }
-//   stop()                 → void
-//   isSpeaking()           → boolean
-//   onStart(cb)            → void
-//   onEnd(cb)              → void
-//
-// Emotion-adjusted parameters:
-//   calm     → pitch 1.0, rate 0.9
-//   stressed → pitch 0.9, rate 0.85
-//   happy    → pitch 1.1, rate 1.0
-//   sad      → pitch 0.9, rate 0.85
-//   neutral  → pitch 1.0, rate 0.95
-// ──────────────────────────────────────────────────────
+// text-to-speech.js - Text-to-Speech Module Tests
 
-// ── Browser API Mocks ────────────────────────────────
+// -- Browser API Mocks --
 
 function createMockSpeechSynthesis() {
   return {
@@ -56,6 +40,18 @@ function createMockUtterance() {
   };
 }
 
+function setupTTSMocks() {
+  const mockSynthesis = createMockSpeechSynthesis();
+  const MockUtterance = createMockUtterance();
+  globalThis.window = {
+    speechSynthesis: mockSynthesis,
+    SpeechSynthesisUtterance: MockUtterance,
+  };
+  globalThis.speechSynthesis = mockSynthesis;
+  globalThis.SpeechSynthesisUtterance = MockUtterance;
+  return { mockSynthesis, MockUtterance };
+}
+
 beforeEach(() => {
   vi.resetModules();
   capturedUtterances = [];
@@ -67,9 +63,10 @@ afterEach(() => {
   vi.restoreAllMocks();
   delete globalThis.speechSynthesis;
   delete globalThis.SpeechSynthesisUtterance;
+  delete globalThis.window;
 });
 
-// ── Tests ────────────────────────────────────────────
+// -- Tests --
 
 describe('text-to-speech', () => {
 
@@ -80,13 +77,45 @@ describe('text-to-speech', () => {
       expect(utterance.text).toBe('Hello astronaut');
     });
 
-    it.todo('calls speechSynthesis.speak() with the utterance');
-    // Expectation: window.speechSynthesis.speak(utterance) is called
+    it('calls speechSynthesis.speak() with the utterance', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const promise = tts.speak('Hello astronaut');
+      vi.advanceTimersByTime(60);
+      expect(mockSynthesis.speak).toHaveBeenCalled();
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      if (utt && utt.onend) utt.onend();
+      await promise;
+      vi.useRealTimers();
+    });
 
-    it.todo('resolves the promise when speech ends (onend fires)');
-    // Expectation: speak() returns a promise that resolves on utterance.onend
+    it('resolves the promise when speech ends (onend fires)', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const promise = tts.speak('Hello');
+      vi.advanceTimersByTime(60);
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      utt.onend();
+      await expect(promise).resolves.toBeUndefined();
+      vi.useRealTimers();
+    });
 
-    it.todo('rejects the promise if speech errors (onerror fires)');
+    it('rejects the promise if speech errors (onerror fires)', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const promise = tts.speak('Hello');
+      vi.advanceTimersByTime(60);
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      utt.onerror({ error: 'synthesis-failed' });
+      await expect(promise).rejects.toThrow('synthesis-failed');
+      vi.useRealTimers();
+    });
   });
 
   describe('emotion-adjusted parameters', () => {
@@ -121,60 +150,203 @@ describe('text-to-speech', () => {
       expect(params.neutral.rate).toBe(0.95);
     });
 
-    it.todo('applies emotion parameters to the utterance before speaking');
-    // Expectation: utterance.pitch and utterance.rate match the emotion table
+    it('applies emotion parameters to the utterance before speaking', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const promise = tts.speak('Hello', { emotion: 'stressed' });
+      vi.advanceTimersByTime(60);
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      expect(utt.pitch).toBe(0.9);
+      expect(utt.rate).toBe(0.85);
+      utt.onend();
+      await promise;
+      vi.useRealTimers();
+    });
   });
 
   describe('stop()', () => {
 
-    it.todo('calls speechSynthesis.cancel() to stop current speech');
-    // Expectation: window.speechSynthesis.cancel() is called
+    it('calls speechSynthesis.cancel() to stop current speech', async () => {
+      const { mockSynthesis } = setupTTSMocks();
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      tts.stop();
+      expect(mockSynthesis.cancel).toHaveBeenCalled();
+    });
 
-    it.todo('sets isSpeaking to false after stop');
+    it('sets isSpeaking to false after stop', async () => {
+      const { mockSynthesis } = setupTTSMocks();
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      tts.stop();
+      expect(tts.isSpeaking()).toBe(false);
+    });
   });
 
   describe('isSpeaking()', () => {
 
-    it.todo('returns false initially');
-    // Before any speak() call
+    it('returns false initially', async () => {
+      setupTTSMocks();
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      expect(tts.isSpeaking()).toBe(false);
+    });
 
-    it.todo('returns true while speech is active');
-    // After speak() called, before onend fires
+    it('returns true while speech is active', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      tts.speak('Hello');
+      vi.advanceTimersByTime(60);
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      utt.onstart();
+      expect(tts.isSpeaking()).toBe(true);
+      utt.onend();
+      vi.useRealTimers();
+    });
 
-    it.todo('returns false after speech completes');
-    // After onend fires
+    it('returns false after speech completes', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const promise = tts.speak('Hello');
+      vi.advanceTimersByTime(60);
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      utt.onstart();
+      utt.onend();
+      await promise;
+      expect(tts.isSpeaking()).toBe(false);
+      vi.useRealTimers();
+    });
   });
 
   describe('queue management', () => {
 
-    it.todo('second speak() waits for first to finish');
-    // Expectation: only one utterance is active at a time;
-    // second speak() queues or waits for promise resolution
+    it('second speak() waits for first to finish', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      // Source cancels current speech before new speak
+      mockSynthesis.speaking = true;
+      const promise = tts.speak('Second');
+      vi.advanceTimersByTime(60);
+      expect(mockSynthesis.cancel).toHaveBeenCalled();
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      utt.onend();
+      await promise;
+      vi.useRealTimers();
+    });
 
-    it.todo('queued speech fires in order');
-    // speak("first"), speak("second") → "first" then "second"
+    it('queued speech fires in order', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const p1 = tts.speak('first');
+      vi.advanceTimersByTime(60);
+      const u1 = capturedUtterances[capturedUtterances.length - 1];
+      expect(u1.text).toBe('first');
+      u1.onend();
+      await p1;
+      const p2 = tts.speak('second');
+      vi.advanceTimersByTime(60);
+      const u2 = capturedUtterances[capturedUtterances.length - 1];
+      expect(u2.text).toBe('second');
+      u2.onend();
+      await p2;
+      vi.useRealTimers();
+    });
   });
 
   describe('callbacks', () => {
 
-    it.todo('onStart callback fires when speech begins');
-    // Expectation: registered callback invoked on utterance.onstart
+    it('onStart callback fires when speech begins', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const startCb = vi.fn();
+      tts.onStart(startCb);
+      tts.speak('Hello');
+      vi.advanceTimersByTime(60);
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      utt.onstart();
+      expect(startCb).toHaveBeenCalled();
+      utt.onend();
+      vi.useRealTimers();
+    });
 
-    it.todo('onEnd callback fires when speech completes');
-    // Expectation: registered callback invoked on utterance.onend
+    it('onEnd callback fires when speech completes', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const endCb = vi.fn();
+      tts.onEnd(endCb);
+      const promise = tts.speak('Hello');
+      vi.advanceTimersByTime(60);
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      utt.onend();
+      await promise;
+      expect(endCb).toHaveBeenCalled();
+      vi.useRealTimers();
+    });
 
-    it.todo('onStart receives the spoken text as argument');
+    it('onStart receives the spoken text as argument', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const startCb = vi.fn();
+      tts.onStart(startCb);
+      tts.speak('Hello astronaut');
+      vi.advanceTimersByTime(60);
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      utt.onstart();
+      expect(startCb).toHaveBeenCalledWith('Hello astronaut');
+      utt.onend();
+      vi.useRealTimers();
+    });
   });
 
   describe('edge cases', () => {
 
-    it.todo('handles empty string gracefully');
-    // speak("") — should not crash, maybe skip
+    it('handles empty string gracefully', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const promise = tts.speak('');
+      vi.advanceTimersByTime(60);
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      expect(utt.text).toBe('');
+      utt.onend();
+      await promise;
+      vi.useRealTimers();
+    });
 
-    it.todo('handles speechSynthesis being undefined');
-    // Very old browser fallback
+    it('handles speechSynthesis being undefined', async () => {
+      globalThis.window = {};
+      delete globalThis.speechSynthesis;
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      await expect(tts.speak('Hello')).rejects.toThrow();
+    });
 
-    it.todo('handles no available voices');
-    // getVoices() returns [] — should still attempt to speak with defaults
+    it('handles no available voices', async () => {
+      vi.useFakeTimers();
+      const { mockSynthesis } = setupTTSMocks();
+      mockSynthesis.getVoices.mockReturnValue([]);
+      capturedUtterances = [];
+      const tts = (await import('../src/js/text-to-speech.js')).default;
+      const promise = tts.speak('Hello');
+      vi.advanceTimersByTime(60);
+      expect(mockSynthesis.speak).toHaveBeenCalled();
+      const utt = capturedUtterances[capturedUtterances.length - 1];
+      utt.onend();
+      await promise;
+      vi.useRealTimers();
+    });
   });
 });

@@ -20,15 +20,17 @@
  */
 
 // ── Normalization statistics ────────────────────────────────────────────────
-// Pre-computed from training data (RAVDESS). Updated when the real model ships.
-// These let us z-score normalize features so the model sees consistent inputs.
+// Tuned for browser getUserMedia audio (Chrome/Edge, default mic gain).
+// Browser mic RMS is typically lower than studio-recorded training data,
+// and spectral centroid tends to sit lower due to codec and AGC effects.
+// These produce z-scores that spread across [-2, +2] for normal speech.
 const DEFAULT_NORM_STATS = {
-  meanPitch:        { mean: 180,   std: 60   },  // Hz — typical F0 range
-  pitchVariance:    { mean: 30,    std: 20   },  // Hz
-  energy:           { mean: 0.05,  std: 0.04 },  // RMS amplitude [0..1]
-  spectralCentroid: { mean: 2000,  std: 800  },  // Hz
-  zeroCrossingRate: { mean: 0.08,  std: 0.04 },  // crossings per sample
-  speechRate:       { mean: 4,     std: 2    },  // peaks per second
+  meanPitch:        { mean: 170,   std: 50   },  // Hz — getUserMedia F0 range
+  pitchVariance:    { mean: 20,    std: 15   },  // Hz — browser variance is lower
+  energy:           { mean: 0.02,  std: 0.02 },  // RMS — browser mic levels are quiet
+  spectralCentroid: { mean: 1800,  std: 700  },  // Hz — slightly lower for browser audio
+  zeroCrossingRate: { mean: 0.07,  std: 0.04 },  // crossings per sample
+  speechRate:       { mean: 3.5,   std: 1.5  },  // peaks per second
 };
 
 // ── Module constants ────────────────────────────────────────────────────────
@@ -39,7 +41,8 @@ const MIN_PITCH_HZ = 80;
 const MAX_PITCH_HZ = 400;
 
 // RMS below this → frame is silent → skip it
-const SILENCE_THRESHOLD = 0.01;
+// Lowered from 0.01 — browser mics with AGC produce quieter signals
+const SILENCE_THRESHOLD = 0.005;
 
 // Autocorrelation: require this minimum peak strength to accept a pitch value.
 // Values below 0.5 are usually noise rather than voiced speech.

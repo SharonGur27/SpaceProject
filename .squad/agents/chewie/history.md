@@ -88,3 +88,29 @@
 - Feature extraction mocks in tests/audio-features.test.js align with librosa output format
 - Model output tensor structure documented for test mocking (tests/emotion-detector.test.js)
 - Training visualization included for debugging (matplotlib plots in train_model.py)
+
+### 2026-04-08 — Emotion Fallback v2: Fixed "Always Neutral" Bug
+
+- **Problem:** The fallback detector always returned "neutral" because:
+  1. Neutral score started at 1.0 and only decreased — near-zero z-scores kept it high
+  2. Weights were too small (0.1–0.3) for other emotions to accumulate enough score
+  3. Softmax temperature of 2.0 flattened distributions, keeping neutral on top
+  4. DEFAULT_NORM_STATS in audio-features.js assumed studio-level mic energy (mean 0.05), but browser getUserMedia produces ~0.02 RMS, so z-scores clustered near zero
+
+- **Fixes applied to `emotion-fallback.js`:**
+  - Removed the _clamp() function — no longer capping scores to [-1, 1]
+  - Neutral score is now a small residual (max 0.3, decays with total deviation) instead of 1.0-based
+  - Increased weights to 0.3–0.45 for stronger differentiation
+  - Added threshold-based bonuses (+0.2 to +0.4) when key features exceed 0.8 std
+  - Lowered softmax temperature from 2.0 to 1.0 for peakier distributions
+  - Added console.log diagnostics showing raw features, scores, and probabilities
+
+- **Fixes applied to `audio-features.js`:**
+  - Lowered energy mean from 0.05 to 0.02, std from 0.04 to 0.02 (matches browser mic levels)
+  - Lowered pitch variance mean from 30 to 20, std from 20 to 15 (browser audio is less varied)
+  - Lowered spectral centroid mean from 2000 to 1800, std from 800 to 700
+  - Lowered pitch mean from 180 to 170, std from 60 to 50
+  - Lowered speech rate mean from 4 to 3.5, std from 2 to 1.5
+  - Lowered SILENCE_THRESHOLD from 0.01 to 0.005 (browser AGC produces quieter signals)
+
+- **Verified:** All 43 tests still pass. Manual testing with 6 different feature vectors confirms stressed, happy, sad, calm, and neutral can all win depending on input prosody.

@@ -5,22 +5,68 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dekel — Your Space Companion</title>
   <link rel="stylesheet" href="css/styles.css">
+  
+  <!-- TensorFlow.js for emotion detection -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
 </head>
 <body>
-  <!--
-    Dekel: A supportive virtual psychologist for astronauts.
-    This is the HTML shell — full UI components come in Phase 2.
-  -->
-
+  <div class="stars"></div>
+  
   <main id="app">
-    <h1>🚀 Dekel</h1>
-    <p id="status">Loading…</p>
+    <header>
+      <h1>🚀 Dekel</h1>
+      <p class="subtitle">Your Space Companion</p>
+    </header>
 
-    <!-- Phase 2 will add: talk button, transcript area, emotion indicator,
-         Dekel's response area, and status transitions. -->
+    <section class="status-section">
+      <p id="status">Loading…</p>
+    </section>
+
+    <section class="interaction-section">
+      <button id="talk-button" class="talk-button">
+        🎤 Talk to Dekel
+      </button>
+      
+      <!-- Fallback text input for browsers without Web Speech API -->
+      <div class="text-fallback">
+        <input 
+          type="text" 
+          id="text-input" 
+          placeholder="Or type your message here..." 
+          aria-label="Type your message"
+        />
+        <button id="submit-button" class="submit-button">Send</button>
+      </div>
+    </section>
+
+    <section class="transcript-section">
+      <h2>You said:</h2>
+      <div id="transcript" class="transcript-box" aria-live="polite"></div>
+    </section>
+
+    <section class="emotion-section">
+      <div id="emotion-indicator" class="emotion-indicator" style="display: none;">
+        <div class="emotion-display">
+          <span id="emotion-emoji" class="emotion-emoji" aria-hidden="true">❓</span>
+          <div class="emotion-details">
+            <span id="emotion-label" class="emotion-label">neutral</span>
+            <span id="emotion-confidence" class="emotion-confidence">0%</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="response-section">
+      <h2>Dekel says:</h2>
+      <div id="response" class="response-box" aria-live="polite" style="display: none;"></div>
+    </section>
   </main>
 
-  <!-- ES modules — loaded in Phase 2 by app.js -->
-  <!-- <script type="module" src="js/app.js"></script> -->
+  <footer>
+    <p>Built with care for astronauts everywhere 🌌</p>
+  </footer>
+
+  <!-- ES modules -->
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
