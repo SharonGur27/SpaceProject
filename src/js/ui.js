@@ -394,6 +394,24 @@ export function showError(message) {
 }
 
 /**
+ * Show indicator of response source (LLM or fallback template)
+ * @param {string} source - 'llm' or 'fallback'
+ * @param {string} [reason] - Why fallback was used (error message)
+ */
+export function setResponseSource(source, reason) {
+  if (!elements.status) return;
+  
+  if (source === 'llm') {
+    elements.status.textContent = '🤖 Dekel responded (AI)';
+    elements.status.style.color = '#4CAF50';
+  } else {
+    const hint = reason ? ` — ${reason}` : '';
+    elements.status.textContent = `📝 Dekel responded (template${hint})`;
+    elements.status.style.color = '#FF9800';
+  }
+}
+
+/**
  * Show a friendly message when speech recognition is unavailable,
  * and guide the user to type instead.
  * @param {string} [message] - Optional custom message
@@ -442,5 +460,6 @@ export default {
   getCustomModel,
   clearContent,
   showError,
+  setResponseSource,
   showSpeechUnavailable
 };

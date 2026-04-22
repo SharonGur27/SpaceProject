@@ -327,6 +327,13 @@ async function processTranscript(savedFeatures) {
     ui.setResponse(response.reply);
     ui.addToHistory('dekel', response.reply);
     
+    // Show response source indicator
+    if (response.source === 'fallback') {
+      ui.setResponseSource('fallback', response.fallbackReason);
+    } else {
+      ui.setResponseSource('llm');
+    }
+    
     // Speak response
     await tts.speak(response.reply, { emotion: response.emotion });
     

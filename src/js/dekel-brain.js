@@ -119,15 +119,17 @@ export async function generateResponse({ text, emotion, confidence }) {
     try {
       const result = await engine.generateResponse({ text, emotion, confidence });
       console.log('[Dekel Brain] Using LLM response');
-      return result;
+      return { ...result, source: 'llm' };
     } catch (error) {
       console.warn('[Dekel Brain] LLM failed, using fallback:', error.message);
-      // Fall through to template-based response
+      const fallback = generateFallbackResponse({ text, emotion, confidence });
+      return { ...fallback, source: 'fallback', fallbackReason: error.message };
     }
   }
   
-  // Fallback to template-based response
-  return generateFallbackResponse({ text, emotion, confidence });
+  // Fallback to template-based response (no API key)
+  const fallback = generateFallbackResponse({ text, emotion, confidence });
+  return { ...fallback, source: 'fallback', fallbackReason: 'API key not configured' };
 }
 
 /**
