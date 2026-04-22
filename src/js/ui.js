@@ -393,6 +393,34 @@ export function showError(message) {
   }
 }
 
+/**
+ * Show a friendly message when speech recognition is unavailable,
+ * and guide the user to type instead.
+ * @param {string} [message] - Optional custom message
+ */
+export function showSpeechUnavailable(message) {
+  const fallbackMsg = message ||
+    '🎤 Speech unavailable — type your message below!';
+
+  // Show in the response area so it's prominent
+  if (elements.responseArea) {
+    elements.responseArea.textContent = fallbackMsg;
+    elements.responseArea.style.display = 'block';
+  }
+
+  // Also update the status bar
+  if (elements.status) {
+    elements.status.textContent = fallbackMsg;
+    elements.status.style.color = '#FF9800';
+  }
+
+  // Focus the text input so the user knows where to type
+  if (elements.textInput) {
+    elements.textInput.focus();
+    elements.textInput.placeholder = 'Type your message here...';
+  }
+}
+
 // Export both default and named
 export default {
   initUI,
@@ -413,5 +441,6 @@ export default {
   getCustomEndpoint,
   getCustomModel,
   clearContent,
-  showError
+  showError,
+  showSpeechUnavailable
 };

@@ -160,7 +160,21 @@ function setupEventHandlers() {
   stt.onError((error) => {
     console.error('[App] Speech recognition error:', error);
     // Don't show error UI for normal interruptions
-    if (!error.message.includes('aborted')) {
+    if (error.message.includes('aborted')) {
+      return;
+    }
+
+    // Non-recoverable errors: show a friendly fallback message
+    const nonRecoverable = ['network', 'not-allowed', 'service-not-allowed'];
+    const isNonRecoverable = nonRecoverable.some(
+      (keyword) => error.message.includes(keyword)
+    );
+
+    if (isNonRecoverable) {
+      isListening = false;
+      ui.showSpeechUnavailable();
+      cleanup();
+    } else {
       ui.showError(error.message);
     }
   });
