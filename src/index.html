@@ -25,7 +25,35 @@
         <div class="settings-panel">
           <p class="settings-warning">⚠️ For demo use only. API key is stored in your browser session.</p>
           <div class="settings-row">
-            <label for="api-key-input">OpenAI API Key:</label>
+            <label for="provider-select">Provider:</label>
+            <select id="provider-select">
+              <option value="openai">OpenAI</option>
+              <option value="groq" selected>Groq (Free)</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div id="custom-provider-fields" class="custom-provider-fields" style="display: none;">
+            <div class="settings-row">
+              <label for="custom-endpoint">Endpoint URL:</label>
+              <input
+                type="text"
+                id="custom-endpoint"
+                placeholder="https://api.example.com/v1/chat/completions"
+                aria-label="Custom API endpoint URL"
+              />
+            </div>
+            <div class="settings-row">
+              <label for="custom-model">Model name:</label>
+              <input
+                type="text"
+                id="custom-model"
+                placeholder="model-name"
+                aria-label="Custom model name"
+              />
+            </div>
+          </div>
+          <div class="settings-row">
+            <label for="api-key-input">API Key:</label>
             <input 
               type="password" 
               id="api-key-input" 

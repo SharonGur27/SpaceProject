@@ -16,6 +16,7 @@ let elements = {};
 // Callbacks
 let apiKeySubmitCallback = null;
 let clearHistoryCallback = null;
+let providerChangeCallback = null;
 
 // Emotion emoji mapping
 const EMOTION_EMOJIS = {
@@ -57,7 +58,11 @@ export function initUI() {
     saveApiKeyButton: document.getElementById('save-api-key'),
     apiStatus: document.getElementById('api-status'),
     conversationHistory: document.getElementById('conversation-history'),
-    clearHistoryButton: document.getElementById('clear-history')
+    clearHistoryButton: document.getElementById('clear-history'),
+    providerSelect: document.getElementById('provider-select'),
+    customProviderFields: document.getElementById('custom-provider-fields'),
+    customEndpoint: document.getElementById('custom-endpoint'),
+    customModel: document.getElementById('custom-model')
   };
   
   // Verify all elements exist
@@ -85,6 +90,17 @@ export function initUI() {
     elements.clearHistoryButton.addEventListener('click', () => {
       if (clearHistoryCallback) {
         clearHistoryCallback();
+      }
+    });
+  }
+  
+  // Set up provider select
+  if (elements.providerSelect) {
+    elements.providerSelect.addEventListener('change', () => {
+      const value = elements.providerSelect.value;
+      toggleCustomFields(value === 'custom');
+      if (providerChangeCallback) {
+        providerChangeCallback(value);
       }
     });
   }
@@ -296,6 +312,61 @@ export function onClearHistory(callback) {
 }
 
 /**
+ * Register a callback for provider dropdown changes
+ * @param {Function} callback - Called with (providerName: string)
+ */
+export function onProviderChange(callback) {
+  providerChangeCallback = callback;
+}
+
+/**
+ * Set the selected provider in the dropdown and toggle custom fields
+ * @param {string} name - Provider key ('openai'|'groq'|'custom')
+ */
+export function setProvider(name) {
+  if (elements.providerSelect) {
+    elements.providerSelect.value = name;
+    toggleCustomFields(name === 'custom');
+  }
+}
+
+/**
+ * Update the API key input placeholder text
+ * @param {string} placeholder - New placeholder text
+ */
+export function setApiKeyPlaceholder(placeholder) {
+  if (elements.apiKeyInput) {
+    elements.apiKeyInput.placeholder = placeholder;
+  }
+}
+
+/**
+ * Get the custom endpoint value
+ * @returns {string} Custom endpoint URL
+ */
+export function getCustomEndpoint() {
+  return elements.customEndpoint ? elements.customEndpoint.value.trim() : '';
+}
+
+/**
+ * Get the custom model value
+ * @returns {string} Custom model name
+ */
+export function getCustomModel() {
+  return elements.customModel ? elements.customModel.value.trim() : '';
+}
+
+/**
+ * Show or hide the custom provider fields
+ * @private
+ */
+function toggleCustomFields(show) {
+  if (elements.customProviderFields) {
+    elements.customProviderFields.style.display = show ? 'block' : 'none';
+  }
+}
+
+/**
  * Clear all dynamic content (transcript, emotion, response)
  */
 export function clearContent() {
@@ -336,6 +407,11 @@ export default {
   onTextSubmit,
   onApiKeySubmit,
   onClearHistory,
+  onProviderChange,
+  setProvider,
+  setApiKeyPlaceholder,
+  getCustomEndpoint,
+  getCustomModel,
   clearContent,
   showError
 };

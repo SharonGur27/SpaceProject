@@ -158,6 +158,33 @@ h1 {
   transition: all 0.3s ease;
 }
 
+.settings-row select {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e6ed;
+  font-size: 0.875rem;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.settings-row select:focus {
+  border-color: #667eea;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.settings-row select option {
+  background: #1a1f3a;
+  color: #e0e6ed;
+}
+
+.custom-provider-fields {
+  margin-bottom: 0.5rem;
+}
+
 .settings-row input:focus {
   border-color: #667eea;
   background: rgba(255, 255, 255, 0.1);
@@ -572,7 +599,8 @@ footer {
 
 /* Focus styles for keyboard navigation */
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 3px solid #667eea;
   outline-offset: 2px;
 }

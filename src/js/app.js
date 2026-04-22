@@ -38,6 +38,12 @@ async function init() {
   // Initialize UI first
   ui.initUI();
   
+  // Restore provider preference (default: groq since it's free)
+  const storedProvider = sessionStorage.getItem('dekel-provider') || 'groq';
+  engine.setProvider(storedProvider);
+  ui.setProvider(storedProvider);
+  ui.setApiKeyPlaceholder(engine.PROVIDERS[storedProvider]?.placeholder || 'your-api-key');
+  
   // Check for stored API key and configure engine
   const storedKey = sessionStorage.getItem('dekel-api-key');
   if (storedKey) {
@@ -95,10 +101,28 @@ function setupEventHandlers() {
   // API key configuration
   ui.onApiKeySubmit((key) => {
     console.log('[App] Configuring API key...');
-    engine.configure({ apiKey: key });
+    // If custom provider, also send custom endpoint/model
+    if (engine.getProvider() === 'custom') {
+      const endpoint = ui.getCustomEndpoint();
+      const model = ui.getCustomModel();
+      engine.configure({ apiKey: key, endpoint: endpoint || undefined, model: model || undefined });
+    } else {
+      engine.configure({ apiKey: key });
+    }
     sessionStorage.setItem('dekel-api-key', key);
     ui.setApiStatus('configured');
     console.log('[App] API key configured and saved');
+  });
+  
+  // Provider dropdown change
+  ui.onProviderChange((providerName) => {
+    console.log('[App] Provider changed to:', providerName);
+    engine.setProvider(providerName);
+    sessionStorage.setItem('dekel-provider', providerName);
+    const preset = engine.PROVIDERS[providerName];
+    if (preset) {
+      ui.setApiKeyPlaceholder(preset.placeholder);
+    }
   });
   
   // Clear history button

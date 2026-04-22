@@ -13,10 +13,33 @@
  * @module conversation-engine
  */
 
+// Provider presets — easy switching between LLM backends
+export const PROVIDERS = {
+  openai: {
+    name: 'OpenAI',
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    model: 'gpt-4o-mini',
+    placeholder: 'sk-...'
+  },
+  groq: {
+    name: 'Groq (Free)',
+    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    model: 'llama-3.1-8b-instant',
+    placeholder: 'gsk_...'
+  },
+  custom: {
+    name: 'Custom',
+    endpoint: '',
+    model: '',
+    placeholder: 'your-api-key'
+  }
+};
+
 // Configuration (set by the UI or environment)
+let currentProvider = 'groq'; // default to free tier for educational demo
 let apiKey = '';
-let apiEndpoint = 'https://api.openai.com/v1/chat/completions';
-let model = 'gpt-4o-mini'; // cost-effective for a demo
+let apiEndpoint = PROVIDERS.groq.endpoint;
+let model = PROVIDERS.groq.model;
 
 // Conversation history (last 10 turns)
 const conversationHistory = [];
@@ -190,11 +213,51 @@ export function clearHistory() {
   console.log('[Conversation Engine] History cleared');
 }
 
+/**
+ * Switch to a provider preset (updates endpoint + model, keeps API key)
+ * @param {string} providerName - Key from PROVIDERS ('openai'|'groq'|'custom')
+ */
+export function setProvider(providerName) {
+  const preset = PROVIDERS[providerName];
+  if (!preset) {
+    console.warn('[Conversation Engine] Unknown provider:', providerName);
+    return;
+  }
+  currentProvider = providerName;
+  if (preset.endpoint) {
+    apiEndpoint = preset.endpoint;
+  }
+  if (preset.model) {
+    model = preset.model;
+  }
+  console.log(`[Conversation Engine] Provider set to ${preset.name} (${apiEndpoint}, ${model})`);
+}
+
+/**
+ * Get the current provider name
+ * @returns {string} Current provider key
+ */
+export function getProvider() {
+  return currentProvider;
+}
+
+/**
+ * Get all available provider presets
+ * @returns {Object} The PROVIDERS map
+ */
+export function getProviders() {
+  return { ...PROVIDERS };
+}
+
 // Export both default and named
 export default {
   configure,
   isConfigured,
   generateResponse,
   getConversationHistory,
-  clearHistory
+  clearHistory,
+  setProvider,
+  getProvider,
+  getProviders,
+  PROVIDERS
 };

@@ -324,7 +324,7 @@ describe('conversation-engine', () => {
       expect(body.model).toBe('gpt-4-turbo');
     });
 
-    it('uses default model (gpt-4o-mini) if not specified', async () => {
+    it('uses default model (groq llama) if not specified', async () => {
       const mockFetch = vi.fn();
       global.fetch = mockFetch;
 
@@ -350,7 +350,7 @@ describe('conversation-engine', () => {
       const callArgs = mockFetch.mock.calls[0][1];
       const body = JSON.parse(callArgs.body);
       
-      expect(body.model).toBe('gpt-4o-mini');
+      expect(body.model).toBe('llama-3.1-8b-instant');
     });
 
     it('parses response and returns reply with calm emotion', async () => {
@@ -1002,6 +1002,166 @@ describe('conversation-engine', () => {
       const userMessage = body.messages.find(m => m.role === 'user');
       
       expect(userMessage.content).toContain('confidence: 100%');
+    });
+  });
+
+  // ── Provider Presets Tests ─────────────────────────
+
+  describe('PROVIDERS constant', () => {
+
+    it('has openai, groq, and custom keys', async () => {
+      const { PROVIDERS } = await import('../src/js/conversation-engine.js');
+
+      expect(PROVIDERS).toHaveProperty('openai');
+      expect(PROVIDERS).toHaveProperty('groq');
+      expect(PROVIDERS).toHaveProperty('custom');
+    });
+
+    it('each provider has name, endpoint, model, placeholder', async () => {
+      const { PROVIDERS } = await import('../src/js/conversation-engine.js');
+
+      for (const key of ['openai', 'groq', 'custom']) {
+        expect(PROVIDERS[key]).toHaveProperty('name');
+        expect(PROVIDERS[key]).toHaveProperty('endpoint');
+        expect(PROVIDERS[key]).toHaveProperty('model');
+        expect(PROVIDERS[key]).toHaveProperty('placeholder');
+      }
+    });
+
+    it('openai preset has correct endpoint', async () => {
+      const { PROVIDERS } = await import('../src/js/conversation-engine.js');
+
+      expect(PROVIDERS.openai.endpoint).toBe('https://api.openai.com/v1/chat/completions');
+    });
+
+    it('groq preset has correct endpoint', async () => {
+      const { PROVIDERS } = await import('../src/js/conversation-engine.js');
+
+      expect(PROVIDERS.groq.endpoint).toBe('https://api.groq.com/openai/v1/chat/completions');
+    });
+
+    it('custom preset has empty endpoint and model', async () => {
+      const { PROVIDERS } = await import('../src/js/conversation-engine.js');
+
+      expect(PROVIDERS.custom.endpoint).toBe('');
+      expect(PROVIDERS.custom.model).toBe('');
+    });
+  });
+
+  describe('setProvider()', () => {
+
+    it('setProvider changes endpoint and model for openai', async () => {
+      const mockFetch = vi.fn();
+      global.fetch = mockFetch;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response' } }]
+        })
+      });
+
+      const { configure, setProvider, generateResponse } = await import('../src/js/conversation-engine.js');
+
+      configure({ apiKey: 'sk-test-key' });
+      setProvider('openai');
+
+      await generateResponse({ text: 'Hi', emotion: 'neutral', confidence: 0.5 });
+
+      const callArgs = mockFetch.mock.calls[0];
+      expect(callArgs[0]).toBe('https://api.openai.com/v1/chat/completions');
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.model).toBe('gpt-4o-mini');
+    });
+
+    it('setProvider changes endpoint and model for groq', async () => {
+      const mockFetch = vi.fn();
+      global.fetch = mockFetch;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response' } }]
+        })
+      });
+
+      const { configure, setProvider, generateResponse } = await import('../src/js/conversation-engine.js');
+
+      configure({ apiKey: 'gsk-test-key' });
+      setProvider('groq');
+
+      await generateResponse({ text: 'Hi', emotion: 'neutral', confidence: 0.5 });
+
+      const callArgs = mockFetch.mock.calls[0];
+      expect(callArgs[0]).toBe('https://api.groq.com/openai/v1/chat/completions');
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.model).toBe('llama-3.1-8b-instant');
+    });
+
+    it('setProvider does NOT overwrite the API key', async () => {
+      const mockFetch = vi.fn();
+      global.fetch = mockFetch;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response' } }]
+        })
+      });
+
+      const { configure, setProvider, generateResponse, isConfigured } = await import('../src/js/conversation-engine.js');
+
+      configure({ apiKey: 'my-secret-key' });
+      setProvider('openai');
+
+      expect(isConfigured()).toBe(true);
+
+      await generateResponse({ text: 'Hi', emotion: 'neutral', confidence: 0.5 });
+
+      const callArgs = mockFetch.mock.calls[0][1];
+      expect(callArgs.headers['Authorization']).toBe('Bearer my-secret-key');
+    });
+
+    it('setProvider ignores unknown provider names', async () => {
+      const { setProvider, getProvider } = await import('../src/js/conversation-engine.js');
+
+      const before = getProvider();
+      setProvider('nonexistent');
+      expect(getProvider()).toBe(before);
+    });
+  });
+
+  describe('getProvider()', () => {
+
+    it('returns the default provider', async () => {
+      const { getProvider } = await import('../src/js/conversation-engine.js');
+
+      expect(getProvider()).toBe('groq');
+    });
+
+    it('returns updated provider after setProvider', async () => {
+      const { setProvider, getProvider } = await import('../src/js/conversation-engine.js');
+
+      setProvider('openai');
+      expect(getProvider()).toBe('openai');
+    });
+  });
+
+  describe('getProviders()', () => {
+
+    it('returns an object with all provider keys', async () => {
+      const { getProviders } = await import('../src/js/conversation-engine.js');
+
+      const providers = getProviders();
+      expect(Object.keys(providers)).toEqual(expect.arrayContaining(['openai', 'groq', 'custom']));
+    });
+
+    it('returns a copy (not the original object)', async () => {
+      const { getProviders, PROVIDERS } = await import('../src/js/conversation-engine.js');
+
+      const copy = getProviders();
+      copy.openai = 'modified';
+      expect(PROVIDERS.openai).not.toBe('modified');
     });
   });
 });
