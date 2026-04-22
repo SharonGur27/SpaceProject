@@ -13,6 +13,10 @@
 // DOM element references (initialized in initUI)
 let elements = {};
 
+// Callbacks
+let apiKeySubmitCallback = null;
+let clearHistoryCallback = null;
+
 // Emotion emoji mapping
 const EMOTION_EMOJIS = {
   calm: '😌',
@@ -48,7 +52,12 @@ export function initUI() {
     emotionConfidence: document.getElementById('emotion-confidence'),
     responseArea: document.getElementById('response'),
     textInput: document.getElementById('text-input'),
-    submitButton: document.getElementById('submit-button')
+    submitButton: document.getElementById('submit-button'),
+    apiKeyInput: document.getElementById('api-key-input'),
+    saveApiKeyButton: document.getElementById('save-api-key'),
+    apiStatus: document.getElementById('api-status'),
+    conversationHistory: document.getElementById('conversation-history'),
+    clearHistoryButton: document.getElementById('clear-history')
   };
   
   // Verify all elements exist
@@ -58,6 +67,26 @@ export function initUI() {
   
   if (missing.length > 0) {
     console.warn('[UI] Missing elements:', missing);
+  }
+  
+  // Set up API key save button
+  if (elements.saveApiKeyButton && elements.apiKeyInput) {
+    elements.saveApiKeyButton.addEventListener('click', () => {
+      const key = elements.apiKeyInput.value.trim();
+      if (key && apiKeySubmitCallback) {
+        apiKeySubmitCallback(key);
+        elements.apiKeyInput.value = ''; // Clear input for security
+      }
+    });
+  }
+  
+  // Set up clear history button
+  if (elements.clearHistoryButton) {
+    elements.clearHistoryButton.addEventListener('click', () => {
+      if (clearHistoryCallback) {
+        clearHistoryCallback();
+      }
+    });
   }
   
   // Set initial state
@@ -110,6 +139,10 @@ export function setTranscript(text, interim = false) {
     elements.transcriptArea.innerHTML = `${text}<span class="interim">...</span>`;
   } else {
     elements.transcriptArea.textContent = text;
+    // When final transcript is set, add to conversation history
+    if (text.trim()) {
+      addToHistory('user', text);
+    }
   }
 }
 
@@ -161,6 +194,58 @@ export function setResponse(text) {
 }
 
 /**
+ * Add a message to the conversation history
+ * @param {string} role - 'user' or 'dekel'
+ * @param {string} text - The message text
+ */
+export function addToHistory(role, text) {
+  if (!elements.conversationHistory) return;
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `chat-message ${role}`;
+  
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'chat-label';
+  labelSpan.textContent = role === 'user' ? 'You' : 'Dekel';
+  
+  const textSpan = document.createElement('span');
+  textSpan.className = 'chat-text';
+  textSpan.textContent = text;
+  
+  messageDiv.appendChild(labelSpan);
+  messageDiv.appendChild(textSpan);
+  
+  elements.conversationHistory.appendChild(messageDiv);
+  
+  // Auto-scroll to bottom
+  elements.conversationHistory.scrollTop = elements.conversationHistory.scrollHeight;
+}
+
+/**
+ * Clear the conversation history display
+ */
+export function clearConversationHistory() {
+  if (!elements.conversationHistory) return;
+  elements.conversationHistory.innerHTML = '';
+}
+
+/**
+ * Set the API configuration status
+ * @param {string} status - 'configured' or 'not_configured'
+ */
+export function setApiStatus(status) {
+  if (!elements.apiStatus) return;
+  
+  if (status === 'configured') {
+    elements.apiStatus.textContent = '✓ Configured';
+    elements.apiStatus.style.color = '#4CAF50';
+  } else {
+    elements.apiStatus.textContent = 'Not configured';
+    elements.apiStatus.style.color = '#9ca3af';
+  }
+}
+
+/**
  * Register a callback for the talk button toggle
  * @param {Function} callback - Called with (isStarting: boolean)
  */
@@ -192,6 +277,22 @@ export function onTextSubmit(callback) {
   elements.textInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') submit();
   });
+}
+
+/**
+ * Register a callback for API key submission
+ * @param {Function} callback - Called with (apiKey: string)
+ */
+export function onApiKeySubmit(callback) {
+  apiKeySubmitCallback = callback;
+}
+
+/**
+ * Register a callback for clearing conversation history
+ * @param {Function} callback - Called when clear button is clicked
+ */
+export function onClearHistory(callback) {
+  clearHistoryCallback = callback;
 }
 
 /**
@@ -228,8 +329,13 @@ export default {
   setTranscript,
   setEmotion,
   setResponse,
+  addToHistory,
+  clearConversationHistory,
+  setApiStatus,
   onTalkToggle,
   onTextSubmit,
+  onApiKeySubmit,
+  onClearHistory,
   clearContent,
   showError
 };

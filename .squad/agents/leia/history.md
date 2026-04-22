@@ -78,3 +78,47 @@
 - Calming space theme reduces anxiety
 - Supportive responses tailored to astronaut context
 - Accessible (keyboard nav, screen reader support, reduced motion)
+
+### 2026-04-09 — LLM Conversation Engine Integration
+
+**Delivered Files:**
+- `src/js/conversation-engine.js` — NEW: LLM API integration module for OpenAI Chat Completions API. Manages conversation history (10 turns), configurable API key/endpoint/model. System prompt defines Dekel's therapeutic personality (reflect+validate → respond to content → open question). Default model: gpt-4o-mini (cost-effective).
+- `src/js/dekel-brain.js` — REFACTORED: Now async, tries LLM first (if configured), falls back to templates on error or when no API key. Exported `generateFallbackResponse()` preserves all original template logic. `setEngine()` for testing.
+- `src/js/app.js` — UPDATED: Handles async brain.generateResponse() with await. Initializes conversation engine with sessionStorage API key on load. Wires up API key submit and clear history handlers. Adds messages to history via ui.addToHistory().
+- `src/js/ui.js` — UPDATED: Added settings panel for API key input, conversation history display with chat-style messages, API status indicator. New exports: onApiKeySubmit(), onClearHistory(), addToHistory(), clearConversationHistory(), setApiStatus().
+- `src/index.html` — UPDATED: Added collapsible settings section with API key input and warning. Added conversation history section with clear button. Kept existing emotion indicator and response sections.
+- `src/css/styles.css` — UPDATED: Styled settings panel (collapsible details, input row, status indicator), conversation history (chat bubbles, user vs dekel styling, scrollbar), responsive mobile styles.
+
+**Architecture Decisions:**
+- **LLM-first with graceful fallback:** Always try LLM if API key is configured. On error (network, rate limit, etc.), automatically fall back to template-based responses. App works perfectly without API key.
+- **Context-aware responses:** LLM receives both emotion label AND user's actual words, plus conversation history (10 turns). System prompt emphasizes Motivational Interviewing techniques (reflection, validation, open questions).
+- **Security/Privacy:** API key stored in sessionStorage (not localStorage) — persists within browser session only. Warning displayed in UI. Direct browser-to-API calls (OpenAI supports CORS).
+- **Conversation history UI:** Separate scrollable chat display shows full back-and-forth. User messages (blue, right-aligned) vs Dekel messages (purple, left-aligned). Auto-scrolls to latest. Clear button resets both UI and engine history.
+- **Model selection:** gpt-4o-mini as default — fast, cheap, sufficient for educational demo. Configurable via engine.configure().
+- **Token limits:** max_tokens: 200 to keep responses concise (3-4 sentences). Temperature: 0.7 for natural variation. Presence penalty: 0.6, frequency penalty: 0.3 to reduce repetition.
+
+**Integration Points:**
+- sessionStorage key: 'dekel-api-key' — auto-loaded on init
+- Conversation history max: 10 turns (20 messages: user+assistant pairs)
+- System prompt defines Dekel's personality: supportive, uses MI techniques, 12-year-old-friendly language
+- Error handling: LLM failures trigger console.warn + automatic fallback, no user-facing error
+- Text fallback path also calls processTranscript() and adds to history
+
+**Key Patterns:**
+- Async/await throughout: generateResponse is now Promise-based
+- Graceful degradation: full functionality without API key
+- Separation of concerns: conversation-engine.js is fully testable in isolation
+- Progressive enhancement: existing template responses preserved as fallback
+
+**Testing:**
+- All existing tests pass (7 test files, 28 dekel-brain tests, 37 conversation-engine tests)
+- Tests verify: async behavior, fallback logic, configuration, API call structure
+- console.log statements show LLM vs fallback usage
+
+**Key Files:**
+- `src/js/conversation-engine.js` (new)
+- `src/js/dekel-brain.js` (refactored to async + LLM integration)
+- `src/js/app.js` (async handling + engine config)
+- `src/js/ui.js` (settings panel + chat history)
+- `src/index.html` (new UI sections)
+- `src/css/styles.css` (chat + settings styles)

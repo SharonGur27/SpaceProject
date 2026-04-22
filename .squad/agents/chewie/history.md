@@ -114,3 +114,17 @@
   - Lowered SILENCE_THRESHOLD from 0.01 to 0.005 (browser AGC produces quieter signals)
 
 - **Verified:** All 43 tests still pass. Manual testing with 6 different feature vectors confirms stressed, happy, sad, calm, and neutral can all win depending on input prosody.
+
+### 2026-04-22 — Conversation Engine Integration: Emotion Data Feeds Into LLM Prompts
+
+**New phase integration:**
+- Emotion detector output (label + confidence) now feeds into conversation-engine.js as part of the LLM API request
+- The LLM system prompt instructs Dekel to consider the detected emotion as context ("User's emotion: [emotion] at [confidence]% confidence")
+- This enables LLM to weight responses based on prosody (e.g., respond with more urgency to stressed vs calm tones)
+- Fallback template selection also uses emotion label, maintaining behavior parity when API unavailable
+
+**For the team:**
+- Audio-to-emotion pipeline unchanged (still synchronous, all tests passing)
+- Emotion output now has broader impact: feeds both templates AND LLM context
+- Leia handles the LLM integration; Chewie's modules remain focused on audio analysis
+- Lando's emotion-detector tests still fully valid; new tests cover emotion → LLM flow

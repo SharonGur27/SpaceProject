@@ -22,6 +22,7 @@ import * as audioFeatures from './audio-features.js';
 import * as emotionDetector from './emotion-detector.js';
 import * as brain from './dekel-brain.js';
 import * as ui from './ui.js';
+import * as engine from './conversation-engine.js';
 
 // App state
 let isListening = false;
@@ -36,6 +37,14 @@ async function init() {
   
   // Initialize UI first
   ui.initUI();
+  
+  // Check for stored API key and configure engine
+  const storedKey = sessionStorage.getItem('dekel-api-key');
+  if (storedKey) {
+    engine.configure({ apiKey: storedKey });
+    ui.setApiStatus('configured');
+    console.log('[App] Restored API key from session');
+  }
   
   // Check for Web Speech API support
   if (!stt.isSupported()) {
@@ -76,11 +85,27 @@ function setupEventHandlers() {
   });
   
   // Text input fallback
-  ui.onTextSubmit((text) => {
+  ui.onTextSubmit(async (text) => {
     console.log('[App] Text fallback:', text);
     currentTranscript = text;
     ui.setTranscript(text);
-    processTranscript();
+    await processTranscript();
+  });
+  
+  // API key configuration
+  ui.onApiKeySubmit((key) => {
+    console.log('[App] Configuring API key...');
+    engine.configure({ apiKey: key });
+    sessionStorage.setItem('dekel-api-key', key);
+    ui.setApiStatus('configured');
+    console.log('[App] API key configured and saved');
+  });
+  
+  // Clear history button
+  ui.onClearHistory(() => {
+    console.log('[App] Clearing conversation history...');
+    engine.clearHistory();
+    ui.clearConversationHistory();
   });
   
   // Mic events
@@ -251,8 +276,8 @@ async function processTranscript(savedFeatures) {
       ui.setEmotion('neutral', 0.5);
     }
     
-    // Generate response using Dekel's brain
-    const response = brain.generateResponse({
+    // Generate response using Dekel's brain (now async)
+    const response = await brain.generateResponse({
       text: currentTranscript,
       emotion: emotion,
       confidence: confidence
@@ -260,8 +285,9 @@ async function processTranscript(savedFeatures) {
     
     console.log('[App] Generated response:', response);
     
-    // Display response
+    // Display response and add to history
     ui.setResponse(response.reply);
+    ui.addToHistory('dekel', response.reply);
     
     // Speak response
     await tts.speak(response.reply, { emotion: response.emotion });

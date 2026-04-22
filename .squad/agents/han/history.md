@@ -33,3 +33,15 @@
 - **Orchestration log:** `.squad/orchestration-log/2026-04-04T17-55-han.md`
 - **Session log:** `.squad/log/2026-04-04T17-55-architecture-design.md`
 - **Next action:** Await team review & kickoff Phase 1 (Leia/Chewie/Lando parallel work)
+
+### 2026-04-22 — Phase 3: Conversation Engine Built (LLM-First + Template Fallback)
+
+**New architecture layer added above emotion detection:**
+- **conversation-engine.js** (Leia): OpenAI Chat Completions integration, 10-turn history, OARS-style system prompt
+- **dekel-brain.js refactored** (Leia): Now async. LLM-first flow with graceful template fallback. Maintains 5-emotion system.
+- **UI enhancements** (Leia): Settings panel for API key, chat history display, API status indicator
+- **Test suite expanded** (Lando): 37 new engine tests + 11 new async dekel-brain tests = 175 total passing
+
+**Key insight:** Dekel can now respond to WHAT users say (content) + HOW they say it (emotion). Templates remain as robust fallback when API unavailable.
+
+**Status:** Conversation engine complete. Tests passing. Ready for integration testing and real API testing.

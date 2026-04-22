@@ -122,6 +122,45 @@
 - Integration tests (end-to-end audio flow)
 - Performance benchmarks (sub-5ms emotion inference)
 
+### 2026-04-08 — Async Conversation Engine Test Suite Created
+
+- **Task:** Write comprehensive tests for the new async conversation system (LLM-based + fallback)
+- **Files created:**
+  - `tests/conversation-engine.test.js` — **NEW FILE** — 37 tests (75 total assertions) covering:
+    - Configuration: `configure()`, `isConfigured()`, custom endpoint/model, default values
+    - API calls: fetch mocking, headers (Authorization, Content-Type), request body structure
+    - System prompt verification, emotion context formatting (`[Voice tone: {emotion}, confidence: {N}%]`)
+    - Response parsing: `{ reply, emotion: 'calm' }` contract
+    - Conversation history: accumulation, 10-turn cap (20 messages max), `clearHistory()`, history sent to API on subsequent calls
+    - Error handling: unconfigured key, network errors, non-200 HTTP (429, 500), malformed JSON, missing fields, history NOT updated on errors
+    - Edge cases: empty text, very long text (no truncation), confidence formatting, special characters, 0/1.0 confidence
+  - `tests/dekel-brain.test.js` — **UPDATED** — Added 11 new tests + converted 16 existing to async:
+    - Made all 16 existing `generateResponse()` calls async with `await`
+    - New async interface tests: Promise verification, `{ reply, emotion }` resolution
+    - Fallback behavior tests: unconfigured engine → template response, fallback works for all emotions
+    - `generateFallbackResponse()` tests: synchronous export, template-based responses, confidence thresholds
+- **Test patterns established:**
+  - Mock `fetch` globally: `global.fetch = vi.fn()`
+  - Mock OpenAI response: `mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: "..." } }] }) })`
+  - Mock errors: `mockResolvedValueOnce({ ok: false, status: 429 })` or `mockRejectedValueOnce(new Error('...'))`
+  - Reset between tests: `vi.resetModules()` + `vi.clearAllMocks()` in `beforeEach` for history isolation
+- **Test results:**
+  - **175 total tests** across 7 files
+  - **conversation-engine.test.js**: 37 tests (all fail as expected — module not implemented yet)
+  - **dekel-brain.test.js**: 27 tests — 8 fail (async/fallback tests), 19 pass (existing template tests)
+  - **All other test files**: 128 tests passing ✓
+- **Key testing strategies:**
+  - **Fetch mock verification:** Check URL, headers, request body structure, model/endpoint config
+  - **Emotion context formatting:** Verify `[Voice tone: stressed, confidence: 75%]` format in user messages
+  - **History management:** Test accumulation, cap enforcement, clearing, and inclusion in subsequent API calls
+  - **Error isolation:** Verify history NOT updated on failed API calls (important for conversation coherence)
+  - **Fallback validation:** Test both configured-but-failed and unconfigured scenarios
+- **Awaiting implementation:**
+  - Leia: `conversation-engine.js` (async LLM API integration)
+  - Leia: `dekel-brain.js` refactor to async with fallback logic
+  - All 37 conversation-engine tests ready to pass once module lands
+  - All 8 dekel-brain async/fallback tests ready to pass once refactor lands
+
 ### 2026-04-07 — All 85 Test Stubs Converted to Real Tests
 
 - **Task:** Convert all 85 `it.todo()` stubs across 5 test files to real tests with assertions

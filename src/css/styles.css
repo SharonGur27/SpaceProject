@@ -95,6 +95,107 @@ h1 {
   font-weight: 300;
 }
 
+/* === Settings Section === */
+.settings-section {
+  margin-bottom: 1.5rem;
+}
+
+.settings-section details summary {
+  cursor: pointer;
+  font-size: 1rem;
+  color: #9ca3af;
+  padding: 0.5rem;
+  user-select: none;
+  list-style: none;
+  text-align: center;
+}
+
+.settings-section details summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-section details[open] summary {
+  margin-bottom: 1rem;
+}
+
+.settings-panel {
+  background: rgba(30, 40, 70, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+
+.settings-warning {
+  color: #FF9800;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.settings-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.settings-row label {
+  font-size: 0.875rem;
+  color: #d1d5db;
+  white-space: nowrap;
+}
+
+.settings-row input {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: #e0e6ed;
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.settings-row input:focus {
+  border-color: #667eea;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.save-button {
+  padding: 0.5rem 1.25rem;
+  background: rgba(102, 126, 234, 0.8);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+}
+
+.save-button:hover {
+  background: rgba(102, 126, 234, 1);
+}
+
+.api-status {
+  display: block;
+  font-size: 0.875rem;
+  color: #9ca3af;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.settings-info {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  line-height: 1.5;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 /* === Status Section === */
 .status-section {
   text-align: center;
@@ -298,6 +399,111 @@ h2 {
   font-weight: 500;
 }
 
+/* === Conversation History === */
+.conversation-section {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+
+.conversation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.clear-button {
+  padding: 0.5rem 1rem;
+  background: rgba(244, 67, 54, 0.2);
+  color: #F44336;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.clear-button:hover {
+  background: rgba(244, 67, 54, 0.3);
+}
+
+.conversation-history {
+  background: rgba(30, 40, 70, 0.4);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  padding: 1rem;
+  max-height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.conversation-history:empty::before {
+  content: 'Your conversation will appear here...';
+  color: #6b7280;
+  font-style: italic;
+  text-align: center;
+  display: block;
+  padding: 2rem;
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  max-width: 85%;
+}
+
+.chat-message.user {
+  align-self: flex-end;
+  background: rgba(102, 126, 234, 0.3);
+  border: 1px solid rgba(102, 126, 234, 0.4);
+}
+
+.chat-message.dekel {
+  align-self: flex-start;
+  background: rgba(118, 75, 162, 0.3);
+  border: 1px solid rgba(118, 75, 162, 0.4);
+}
+
+.chat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.chat-text {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #e0e6ed;
+}
+
+/* Scrollbar styling for conversation history */
+.conversation-history::-webkit-scrollbar {
+  width: 8px;
+}
+
+.conversation-history::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.conversation-history::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.5);
+  border-radius: 4px;
+}
+
+.conversation-history::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.7);
+}
+
 /* === Footer === */
 footer {
   position: relative;
@@ -337,6 +543,19 @@ footer {
   
   .emotion-emoji {
     font-size: 2.5rem;
+  }
+  
+  .settings-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .settings-row label {
+    margin-bottom: 0.25rem;
+  }
+  
+  .chat-message {
+    max-width: 95%;
   }
 }
 

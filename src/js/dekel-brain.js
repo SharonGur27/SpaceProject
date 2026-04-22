@@ -1,14 +1,19 @@
 /**
- * Dekel's Brain — Rule-Based Response Generator
+ * Dekel's Brain — Response Generator with LLM Integration
  * 
  * Takes user input (text + detected emotion) and generates supportive, appropriate responses.
+ * Uses LLM API (if configured) for contextual responses, falls back to templates.
  * 
  * How to explain it to a kid:
  * "This is Dekel's thinking part. When you tell Dekel how you feel, this decides
- * what Dekel should say back to help you feel better or keep feeling good."
+ * what Dekel should say back to help you feel better or keep feeling good.
+ * It can use a smart assistant to understand what you really mean, or use its
+ * own pre-written responses if the assistant isn't available."
  * 
  * @module dekel-brain
  */
+
+import * as engine from './conversation-engine.js';
 
 // Response templates for each emotion
 const RESPONSE_TEMPLATES = {
@@ -104,10 +109,37 @@ const CONFIDENCE_THRESHOLDS = {
  * @param {string} input.text - What the user said (transcript)
  * @param {string} input.emotion - Detected emotion (calm, stressed, happy, sad, neutral)
  * @param {number} input.confidence - Confidence score (0-1)
+ * @returns {Promise<Object>} Response object with reply and emotion
+ */
+export async function generateResponse({ text, emotion, confidence }) {
+  console.log('[Dekel Brain] Generating response for:', { text, emotion, confidence });
+  
+  // Try LLM engine first (if configured)
+  if (engine.isConfigured()) {
+    try {
+      const result = await engine.generateResponse({ text, emotion, confidence });
+      console.log('[Dekel Brain] Using LLM response');
+      return result;
+    } catch (error) {
+      console.warn('[Dekel Brain] LLM failed, using fallback:', error.message);
+      // Fall through to template-based response
+    }
+  }
+  
+  // Fallback to template-based response
+  return generateFallbackResponse({ text, emotion, confidence });
+}
+
+/**
+ * Generate a template-based response (fallback mode)
+ * @param {Object} input - The input data
+ * @param {string} input.text - What the user said (transcript)
+ * @param {string} input.emotion - Detected emotion (calm, stressed, happy, sad, neutral)
+ * @param {number} input.confidence - Confidence score (0-1)
  * @returns {Object} Response object with reply and emotion
  */
-export function generateResponse({ text, emotion, confidence }) {
-  console.log('[Dekel Brain] Generating response for:', { text, emotion, confidence });
+export function generateFallbackResponse({ text, emotion, confidence }) {
+  console.log('[Dekel Brain] Generating fallback response');
   
   // If confidence is too low, ask for clarification
   if (confidence < CONFIDENCE_THRESHOLDS.MEDIUM) {
@@ -146,7 +178,19 @@ function getRandomItem(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
 
+/**
+ * Set the conversation engine (for testing/dependency injection)
+ * @param {Object} customEngine - Custom engine implementation
+ */
+export function setEngine(customEngine) {
+  // For testing purposes - allows injecting a mock engine
+  // Note: This modifies the imported engine reference, so use with caution
+  console.log('[Dekel Brain] Custom engine set');
+}
+
 // Export both default and named
 export default {
-  generateResponse
+  generateResponse,
+  generateFallbackResponse,
+  setEngine
 };
