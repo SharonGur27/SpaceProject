@@ -367,6 +367,20 @@ function toggleCustomFields(show) {
 }
 
 /**
+ * Set a custom status message with a specific color.
+ * Use this for one-off messages like "Reconnecting…" that don't
+ * correspond to a standard app state.
+ *
+ * @param {string} text - The status text to display
+ * @param {string} [color='#fff'] - CSS color for the text
+ */
+export function setStatusText(text, color = '#fff') {
+  if (!elements.status) return;
+  elements.status.textContent = text;
+  elements.status.style.color = color;
+}
+
+/**
  * Clear all dynamic content (transcript, emotion, response)
  */
 export function clearContent() {
@@ -457,6 +471,7 @@ export function showSpeechUnavailable(message) {
 export default {
   initUI,
   setStatus,
+  setStatusText,
   setTranscript,
   setEmotion,
   setResponse,

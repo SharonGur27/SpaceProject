@@ -6,13 +6,19 @@
  *
  * How to explain it to a kid:
  *   "This is the part of Dekel's brain that turns your voice into words,
- *    like subtitles on a movie."
+ *    like subtitles on a movie. If the connection hiccups, it tries again
+ *    automatically — like when your Wi-Fi drops and your phone reconnects."
  *
  * Features:
  *   - Continuous mode: keeps listening until you tell it to stop
  *   - Interim results: shows words as you're still speaking
  *   - Final results: confirmed text when you pause
- *   - Auto-restart: if the browser stops listening, we start again
+ *   - Auto-restart with backoff: if the browser stops listening, we start
+ *     again — waiting a little longer each time to avoid hammering the API
+ *   - Network retry: transient network errors get a few retries before
+ *     giving up
+ *   - Silence timeout: if recognition stalls, we proactively restart it
+ *   - Status updates: tells the app when we're reconnecting vs. failed
  *   - Fallback: if the browser doesn't support speech recognition,
  *     you can type instead
  *
@@ -29,6 +35,25 @@ let shouldRestart = false;       // Whether to auto-restart after the browser st
 let interimResultCallback = null;
 let finalResultCallback = null;
 let errorCallback = null;
+let statusCallback = null;       // Notifies the app about reconnection status
+
+// ── Reliability State ──────────────────────────────────────────────
+// These track restart timing and error retries so we can be smart
+// about recovering from glitches vs. giving up on real failures.
+
+let restartDelay = 300;                   // Current restart delay (ms), grows with backoff
+const RESTART_DELAY_INITIAL = 300;        // First restart: quick
+const RESTART_DELAY_MAX = 5000;           // Cap: don't wait longer than 5 seconds
+const BACKOFF_MULTIPLIER = 1.5;           // Each restart waits 1.5× longer
+
+let networkRetryCount = 0;                // How many network errors in a row
+const NETWORK_RETRY_MAX = 3;             // Give up after 3 consecutive network failures
+
+let silenceTimer = null;                  // Fires if no results arrive for too long
+const SILENCE_TIMEOUT_MS = 15000;         // 15 seconds of silence → proactive restart
+
+let lastResultTime = 0;                   // Timestamp of last result (for logging)
+let restartCount = 0;                     // Total restarts in this session (for logging)
 
 // ── Browser Support Check ──────────────────────────────────────────
 
@@ -66,7 +91,7 @@ function isSupported() {
  */
 function start(mediaStream) {
   if (!isSupported()) {
-    console.warn('[speech-to-text] SpeechRecognition not supported. Use submitText() for typed input.');
+    console.warn('[STT] SpeechRecognition not supported. Use submitText() for typed input.');
     if (errorCallback) {
       errorCallback(new Error(
         'Speech recognition is not supported in this browser. You can type instead.'
@@ -80,89 +105,14 @@ function start(mediaStream) {
     return;
   }
 
-  // Create a fresh recognition instance each time.
-  // Some browsers behave oddly when reusing instances.
-  recognition = new SpeechRecognition();
+  // Reset reliability counters for a fresh session
+  restartDelay = RESTART_DELAY_INITIAL;
+  networkRetryCount = 0;
+  restartCount = 0;
+  lastResultTime = Date.now();
 
-  // ── Configuration ────────────────────────────────────────────
-  recognition.lang = 'en-US';          // Language: US English
-  recognition.continuous = true;       // Don't stop after one sentence
-  recognition.interimResults = true;   // Show partial results as user speaks
-  recognition.maxAlternatives = 1;     // We only need the best guess
-
-  // ── Event Handlers ───────────────────────────────────────────
-
-  /**
-   * The 'result' event fires whenever the browser has something to report.
-   * Each result can be "interim" (still changing) or "final" (confirmed).
-   */
-  recognition.onresult = (event) => {
-    // Process all new results since the last event
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const result = event.results[i];
-      const text = result[0].transcript.trim();
-
-      if (result.isFinal) {
-        // The browser is confident about this text
-        if (finalResultCallback && text.length > 0) {
-          finalResultCallback(text);
-        }
-      } else {
-        // Still listening — this text might change
-        if (interimResultCallback && text.length > 0) {
-          interimResultCallback(text);
-        }
-      }
-    }
-  };
-
-  /**
-   * The 'end' event fires when recognition stops — this can happen
-   * because the user paused, the browser decided to stop, or there
-   * was a network issue. If we're in continuous mode, we restart.
-   */
-  recognition.onend = () => {
-    isListening = false;
-
-    // Auto-restart if we haven't been told to stop
-    if (shouldRestart) {
-      console.log('[speech-to-text] Auto-restarting recognition…');
-      // Small delay to avoid hammering the API
-      setTimeout(() => {
-        if (shouldRestart) {
-          startRecognition();
-        }
-      }, 300);
-    }
-  };
-
-  /**
-   * Handle recognition errors.
-   * Some errors are recoverable (network glitch), others aren't (no-speech).
-   */
-  recognition.onerror = (event) => {
-    console.error('[speech-to-text] Error:', event.error);
-
-    // 'no-speech' means the user is quiet — not really an error.
-    // 'aborted' means we called stop() — also expected.
-    // For these, we just let auto-restart handle it.
-    if (event.error === 'no-speech' || event.error === 'aborted') {
-      return;
-    }
-
-    // 'not-allowed' means mic permission was denied at the browser level
-    if (event.error === 'not-allowed') {
-      shouldRestart = false; // Don't keep retrying
-    }
-
-    if (errorCallback) {
-      errorCallback(new Error(`Speech recognition error: ${event.error}`));
-    }
-  };
-
-  // ── Start Listening ──────────────────────────────────────────
   shouldRestart = true;
-  startRecognition();
+  createAndStartRecognition();
 }
 
 /**
@@ -171,6 +121,7 @@ function start(mediaStream) {
 function stop() {
   shouldRestart = false;
   isListening = false;
+  clearSilenceTimer();
 
   if (recognition) {
     try {
@@ -224,7 +175,162 @@ function onError(cb) {
   errorCallback = cb;
 }
 
+/**
+ * Register a callback for status changes during reconnection.
+ * Lets the app show the user what's happening behind the scenes.
+ *
+ * @param {function} cb - Called with a status object:
+ *   { state: 'reconnecting'|'failed', attempt: number, maxAttempts: number, reason: string }
+ */
+function onStatusChange(cb) {
+  statusCallback = cb;
+}
+
 // ── Internal Helpers ───────────────────────────────────────────────
+
+/**
+ * Create a brand-new SpeechRecognition instance and start it.
+ * We create a fresh instance every time because some browsers (especially
+ * Chrome) have bugs when reusing an instance after errors.
+ */
+function createAndStartRecognition() {
+  // Clean up any old instance
+  if (recognition) {
+    try { recognition.stop(); } catch (e) { /* ignore */ }
+    recognition = null;
+  }
+
+  recognition = new SpeechRecognition();
+
+  // ── Configuration ────────────────────────────────────────────
+  recognition.lang = 'en-US';          // Language: US English
+  recognition.continuous = true;       // Don't stop after one sentence
+  recognition.interimResults = true;   // Show partial results as user speaks
+  recognition.maxAlternatives = 1;     // We only need the best guess
+
+  // ── Event Handlers ───────────────────────────────────────────
+
+  /**
+   * The 'result' event fires whenever the browser has something to report.
+   * Each result can be "interim" (still changing) or "final" (confirmed).
+   */
+  recognition.onresult = (event) => {
+    // We got results — reset backoff and silence timer since things are working
+    restartDelay = RESTART_DELAY_INITIAL;
+    networkRetryCount = 0;
+    lastResultTime = Date.now();
+    resetSilenceTimer();
+
+    // Process all new results since the last event
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const result = event.results[i];
+      const text = result[0].transcript.trim();
+
+      if (result.isFinal) {
+        // The browser is confident about this text
+        if (finalResultCallback && text.length > 0) {
+          finalResultCallback(text);
+        }
+      } else {
+        // Still listening — this text might change
+        if (interimResultCallback && text.length > 0) {
+          interimResultCallback(text);
+        }
+      }
+    }
+  };
+
+  /**
+   * The 'end' event fires when recognition stops — this can happen
+   * because the user paused, the browser decided to stop, or there
+   * was a network issue. If we're in continuous mode, we restart.
+   */
+  recognition.onend = () => {
+    isListening = false;
+    clearSilenceTimer();
+
+    // Auto-restart if we haven't been told to stop
+    if (shouldRestart) {
+      restartCount++;
+      console.log(`[STT] Recognition ended. Auto-restart #${restartCount} in ${restartDelay}ms…`);
+
+      if (statusCallback && restartCount > 1) {
+        statusCallback({ state: 'reconnecting', attempt: restartCount, reason: 'recognition ended' });
+      }
+
+      setTimeout(() => {
+        if (shouldRestart) {
+          // Create a fresh instance each time to avoid browser quirks
+          createAndStartRecognition();
+        }
+      }, restartDelay);
+
+      // Increase delay for next time (exponential backoff with cap)
+      restartDelay = Math.min(restartDelay * BACKOFF_MULTIPLIER, RESTART_DELAY_MAX);
+    }
+  };
+
+  /**
+   * Handle recognition errors.
+   * Some errors are recoverable (network glitch), others aren't (permission denied).
+   *
+   * Strategy:
+   *   - no-speech / aborted: harmless, let auto-restart handle it
+   *   - network / audio-capture: retry up to NETWORK_RETRY_MAX times
+   *   - not-allowed / service-not-allowed: give up immediately
+   */
+  recognition.onerror = (event) => {
+    console.warn(`[STT] Error: "${event.error}" (network retries: ${networkRetryCount}/${NETWORK_RETRY_MAX})`);
+
+    // 'no-speech' means the user is quiet — not really an error.
+    // 'aborted' means we called stop() — also expected.
+    // For these, we just let auto-restart handle it.
+    if (event.error === 'no-speech' || event.error === 'aborted') {
+      return;
+    }
+
+    // ── Transient errors: retry with backoff ─────────────────
+    if (event.error === 'network' || event.error === 'audio-capture') {
+      networkRetryCount++;
+
+      if (networkRetryCount <= NETWORK_RETRY_MAX) {
+        console.log(`[STT] Transient "${event.error}" — will retry (${networkRetryCount}/${NETWORK_RETRY_MAX})`);
+        if (statusCallback) {
+          statusCallback({
+            state: 'reconnecting',
+            attempt: networkRetryCount,
+            maxAttempts: NETWORK_RETRY_MAX,
+            reason: event.error
+          });
+        }
+        // Don't call errorCallback yet — let auto-restart handle it
+        return;
+      }
+
+      // Exhausted retries — fall through to report as failure
+      console.error(`[STT] "${event.error}" persisted after ${NETWORK_RETRY_MAX} retries — giving up`);
+      if (statusCallback) {
+        statusCallback({ state: 'failed', reason: event.error });
+      }
+    }
+
+    // ── Non-recoverable errors ───────────────────────────────
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      shouldRestart = false; // Don't keep retrying
+      console.error(`[STT] Non-recoverable: "${event.error}" — stopping`);
+      if (statusCallback) {
+        statusCallback({ state: 'failed', reason: event.error });
+      }
+    }
+
+    if (errorCallback) {
+      errorCallback(new Error(`Speech recognition error: ${event.error}`));
+    }
+  };
+
+  // ── Actually start ───────────────────────────────────────────
+  startRecognition();
+}
 
 /**
  * Actually start the recognition instance.
@@ -236,10 +342,41 @@ function startRecognition() {
   try {
     recognition.start();
     isListening = true;
-    console.log('[speech-to-text] Listening…');
+    resetSilenceTimer();
+    console.log('[STT] Listening…');
   } catch (e) {
     // Can throw if already started — safe to ignore
-    console.warn('[speech-to-text] Could not start:', e.message);
+    console.warn('[STT] Could not start:', e.message);
+  }
+}
+
+/**
+ * Reset the silence timer. If no speech results arrive within
+ * SILENCE_TIMEOUT_MS, we proactively restart recognition.
+ * This catches the case where the browser's connection to Google's
+ * speech servers silently dies.
+ */
+function resetSilenceTimer() {
+  clearSilenceTimer();
+  if (!shouldRestart) return;
+
+  silenceTimer = setTimeout(() => {
+    if (isListening && shouldRestart) {
+      const silenceSec = Math.round((Date.now() - lastResultTime) / 1000);
+      console.warn(`[STT] No results for ${silenceSec}s — proactively restarting`);
+      // Stop current instance and let onend trigger a fresh restart
+      try { recognition.stop(); } catch (e) { /* ignore */ }
+    }
+  }, SILENCE_TIMEOUT_MS);
+}
+
+/**
+ * Clear the silence timer so it doesn't fire.
+ */
+function clearSilenceTimer() {
+  if (silenceTimer) {
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
   }
 }
 
@@ -252,6 +389,7 @@ export default {
   onInterimResult,
   onFinalResult,
   onError,
+  onStatusChange,
   isSupported
 };
 
@@ -262,5 +400,6 @@ export {
   onInterimResult,
   onFinalResult,
   onError,
+  onStatusChange,
   isSupported
 };

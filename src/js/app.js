@@ -157,6 +157,18 @@ function setupEventHandlers() {
     ui.setTranscript(transcript, false);
   });
   
+  // STT status changes (reconnecting, failed) — gives user feedback
+  stt.onStatusChange((status) => {
+    if (status.state === 'reconnecting') {
+      const msg = status.maxAttempts
+        ? `🔄 Reconnecting speech… (attempt ${status.attempt}/${status.maxAttempts})`
+        : '🔄 Reconnecting speech…';
+      console.log(`[App] STT reconnecting: ${status.reason} (attempt ${status.attempt})`);
+      ui.setStatusText(msg, '#FF9800');
+    }
+    // 'failed' status is handled by the error callback below
+  });
+
   stt.onError((error) => {
     console.error('[App] Speech recognition error:', error);
     // Don't show error UI for normal interruptions
@@ -164,26 +176,22 @@ function setupEventHandlers() {
       return;
     }
 
-    // Non-recoverable errors: show a friendly fallback message
-    const nonRecoverable = ['network', 'not-allowed', 'service-not-allowed'];
-    const isNonRecoverable = nonRecoverable.some(
-      (keyword) => error.message.includes(keyword)
-    );
+    // All errors that reach here have exhausted retries (network) or
+    // are non-recoverable (not-allowed, service-not-allowed)
+    isListening = false;
+    stt.stop();
+    mic.stop();
+    ui.setStatus('ready');
+    cleanup();
 
-    if (isNonRecoverable) {
-      isListening = false;
-      stt.stop();
-      mic.stop();
-      ui.setStatus('ready');
+    // Show appropriate message
+    const permissionErrors = ['not-allowed', 'service-not-allowed'];
+    const isPermission = permissionErrors.some(k => error.message.includes(k));
+
+    if (isPermission || error.message.includes('network')) {
       ui.showSpeechUnavailable();
-      cleanup();
     } else {
-      isListening = false;
-      stt.stop();
-      mic.stop();
-      ui.setStatus('ready');
       ui.showError(error.message);
-      cleanup();
     }
   });
   
