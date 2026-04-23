@@ -34,7 +34,7 @@ const EMOTION_PRESETS = {
 
 // ── Constants ──────────────────────────────────────────────────────
 
-const WATCHDOG_TIMEOUT_MS = 30000;    // Force-resolve speak() after 30s (Chrome onend bug)
+const WATCHDOG_TIMEOUT_MS = 60000;    // Force-resolve speak() after 60s (Chrome onend bug)
 const KEEPALIVE_INTERVAL_MS = 10000;  // Chrome drops onend for long utterances; pulse every 10s
 
 // ── State ──────────────────────────────────────────────────────────
