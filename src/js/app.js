@@ -23,11 +23,20 @@ import * as emotionDetector from './emotion-detector.js';
 import * as brain from './dekel-brain.js';
 import * as ui from './ui.js';
 import * as engine from './conversation-engine.js';
+import * as whisperStt from './whisper-stt.js';
 
 // App state
 let isListening = false;
 let currentTranscript = '';
 let analyserNode = null;
+
+// ── STT Strategy ───────────────────────────────────────────────────
+// 'webspeech' | 'whisper' | 'auto' (default)
+// In 'auto' mode, starts with Web Speech and switches to Whisper
+// after 2+ network errors in a session.
+let activeSttMode = 'webspeech';   // The mode actually in use right now
+let webSpeechNetworkErrors = 0;    // Network error counter for auto-switch
+const AUTO_SWITCH_THRESHOLD = 2;   // Switch after this many network errors
 
 /**
  * Initialize the application
@@ -52,10 +61,14 @@ async function init() {
     console.log('[App] Restored API key from session');
   }
   
-  // Check for Web Speech API support
-  if (!stt.isSupported()) {
-    ui.showError('Speech recognition not supported in this browser. Please use Chrome or Edge.');
-    console.error('[App] Web Speech API not supported');
+  // ── STT strategy selection ─────────────────────────────────────
+  const sttPref = localStorage.getItem('dekel-stt-provider') || 'auto';
+  initSttStrategy(sttPref);
+  
+  // Check that at least one STT path is usable
+  if (!stt.isSupported() && !whisperStt.isSupported()) {
+    ui.showError('No speech recognition available. Please use Chrome/Edge or configure a Groq API key.');
+    console.error('[App] No STT backend available');
     return;
   }
   
@@ -176,6 +189,20 @@ function setupEventHandlers() {
       return;
     }
 
+    // Track network errors for auto-switch to Whisper
+    if (error.message.includes('network')) {
+      webSpeechNetworkErrors++;
+      console.warn(`[App] Web Speech network error #${webSpeechNetworkErrors}`);
+
+      if (activeSttMode === 'webspeech' && getSttPreference() === 'auto'
+          && webSpeechNetworkErrors >= AUTO_SWITCH_THRESHOLD
+          && whisperStt.isSupported()) {
+        console.log(`[App] ⚡ Auto-switching to Whisper STT after ${webSpeechNetworkErrors} network errors`);
+        activeSttMode = 'whisper';
+        ui.setStatusText('🔄 Switched to Whisper (speech service unreliable)', '#FF9800');
+      }
+    }
+
     // All errors that reach here have exhausted retries (network) or
     // are non-recoverable (not-allowed, service-not-allowed)
     isListening = false;
@@ -214,11 +241,12 @@ function setupEventHandlers() {
 }
 
 /**
- * Start listening to user input
+ * Start listening to user input.
+ * Uses either Web Speech or Whisper depending on the active STT mode.
  */
 async function startListening() {
   console.log('[App] Starting listening session…');
-  console.log('[App]   app.isListening:', isListening);
+  console.log('[App]   app.isListening:', isListening, '  sttMode:', activeSttMode);
   
   try {
     isListening = true;
@@ -250,9 +278,21 @@ async function startListening() {
     audioFeatures.init(analyserNode, audioContext);
     audioFeatures.startExtraction();
     
-    // Start speech recognition (small delay to avoid mic contention)
-    await new Promise(resolve => setTimeout(resolve, 100));
-    stt.start();
+    // Start the appropriate STT engine
+    if (activeSttMode === 'whisper') {
+      // Whisper mode: record audio, transcribe on stop
+      const stream = mic.getMediaStream();
+      if (!stream) {
+        throw new Error('No media stream available for Whisper recording');
+      }
+      whisperStt.start(stream);
+      ui.setStatusText('🎙️ Recording…', '#2196F3');
+      console.log('[App] Whisper recording started');
+    } else {
+      // Web Speech mode: live recognition
+      await new Promise(resolve => setTimeout(resolve, 100));
+      stt.start();
+    }
     
     console.log('[App] Listening session started');
   } catch (error) {
@@ -267,7 +307,8 @@ async function startListening() {
 }
 
 /**
- * Stop listening and process the input
+ * Stop listening and process the input.
+ * For Whisper mode, waits for the API transcription before processing.
  */
 async function stopListening() {
   console.log('[App] Stopping listening session...');
@@ -283,8 +324,17 @@ async function stopListening() {
     
     // Stop audio capture
     audioFeatures.stopExtraction();
-    stt.stop();
-    mic.stop();
+
+    if (activeSttMode === 'whisper') {
+      // Whisper mode: stop recording → triggers API call → callback delivers transcript
+      stt.stop(); // stop Web Speech if it was running (no-op if not)
+      await whisperStt.stop();
+      mic.stop();
+    } else {
+      // Web Speech mode: transcript already in currentTranscript from callbacks
+      stt.stop();
+      mic.stop();
+    }
     
     // Process the transcript with the saved features
     await processTranscript(savedFeatures);
@@ -379,6 +429,58 @@ function cleanup() {
     }
     analyserNode = null;
   }
+}
+
+// ── STT Strategy Helpers ───────────────────────────────────────────
+
+/**
+ * Read the user's STT provider preference from localStorage.
+ * @returns {'webspeech'|'whisper'|'auto'}
+ */
+function getSttPreference() {
+  return localStorage.getItem('dekel-stt-provider') || 'auto';
+}
+
+/**
+ * Initialize STT strategy based on preference.
+ * Sets up Whisper callbacks and determines the active mode.
+ *
+ * @param {'webspeech'|'whisper'|'auto'} preference
+ */
+function initSttStrategy(preference) {
+  console.log(`[App] STT strategy: ${preference}`);
+
+  // Wire up Whisper callbacks (idempotent)
+  whisperStt.onFinalResult((transcript) => {
+    console.log('[App] Whisper transcript:', transcript);
+    currentTranscript = transcript;
+    ui.setTranscript(transcript, false);
+  });
+
+  whisperStt.onError((error) => {
+    console.error('[App] Whisper error:', error.message);
+    ui.showError(error.message);
+  });
+
+  // Determine active mode
+  if (preference === 'whisper') {
+    if (whisperStt.isSupported()) {
+      activeSttMode = 'whisper';
+      console.log('[App] Using Whisper STT (user preference)');
+    } else {
+      console.warn('[App] Whisper requested but not available (no API key?). Falling back to Web Speech.');
+      activeSttMode = 'webspeech';
+    }
+  } else if (preference === 'webspeech') {
+    activeSttMode = 'webspeech';
+    console.log('[App] Using Web Speech STT (user preference)');
+  } else {
+    // 'auto' — start with Web Speech, switch on failure
+    activeSttMode = stt.isSupported() ? 'webspeech' : 'whisper';
+    console.log(`[App] Auto mode — starting with ${activeSttMode}`);
+  }
+
+  webSpeechNetworkErrors = 0;
 }
 
 // Start the app when DOM is ready
