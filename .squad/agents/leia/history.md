@@ -246,3 +246,12 @@
 **Preserved:** All element IDs (JS references), space theme colors/gradients, talk button prominence, accessibility features. No JS changes needed.
 
 **Tests:** All 204 tests passing.
+
+### 2026-04-23 — UI Tweaks: Vertical Layout, Longer Responses, Emotion Badge
+**Problem:** Sharon found the side-by-side transcript/response layout too cramped for longer text, Dekel's responses too terse (3-4 sentence limit), and the emotion indicator taking unnecessary space in the control bar.
+**Changes:**
+- **conversation-engine.js:** Changed response length guidance from 3-4 sentences max to 4-8 sentences and RESPOND TO CONTENT from 1-2 sentences to 2-4 sentences.
+- **index.html:** Stacked transcript/response boxes vertically. Moved emotion indicator into transcript box as a badge overlay.
+- **styles.css:** Replaced 2-column grid with flex column layout. Restyled emotion indicator as a compact pill badge.
+**Preserved:** All element IDs for JS references, compact header, horizontal control bar, mobile responsive breakpoints.
+**Tests:** All 204 tests passing.
