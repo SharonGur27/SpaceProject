@@ -233,8 +233,7 @@ h1 {
   flex-wrap: wrap;
 }
 
-.control-bar-status,
-.control-bar-emotion {
+.control-bar-status {
   flex: 0 1 auto;
   min-width: 0;
 }
@@ -356,8 +355,8 @@ h1 {
 }
 
 .conversation-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
   margin-bottom: 1rem;
 }
@@ -400,42 +399,41 @@ h2 {
   font-style: italic;
 }
 
-/* === Emotion Indicator (compact for control bar) === */
-.emotion-indicator {
-  display: flex;
-  justify-content: center;
+/* === Transcript wrapper (positions emotion badge) === */
+.transcript-wrapper {
+  position: relative;
 }
 
-.emotion-display {
-  display: flex;
+/* === Emotion Indicator (compact badge on transcript box) === */
+.emotion-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  background: rgba(30, 40, 70, 0.6);
+  gap: 0.35rem;
+  background: rgba(30, 40, 70, 0.85);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 3rem;
-  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 2rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  z-index: 2;
 }
 
 .emotion-emoji {
-  font-size: 1.75rem;
+  font-size: 0.9rem;
   line-height: 1;
 }
 
-.emotion-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
 .emotion-label {
-  font-size: 1rem;
   font-weight: 600;
   text-transform: capitalize;
 }
 
 .emotion-confidence {
-  font-size: 0.875rem;
+  color: #9ca3af;
   font-weight: 500;
 }
 
@@ -593,19 +591,15 @@ footer {
   }
 
   .conversation-columns {
-    grid-template-columns: 1fr;
+    gap: 0.75rem;
   }
   
   .text-fallback {
     flex-direction: column;
   }
   
-  .emotion-display {
-    padding: 0.5rem 1rem;
-  }
-  
-  .emotion-emoji {
-    font-size: 1.5rem;
+  .emotion-badge {
+    font-size: 0.7rem;
   }
   
   .settings-row {
