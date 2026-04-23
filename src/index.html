@@ -14,8 +14,7 @@
   
   <main id="app">
     <header>
-      <h1>🚀 Dekel</h1>
-      <p class="subtitle">Your Space Companion</p>
+      <h1>🚀 Dekel <span class="subtitle">— Your Space Companion</span></h1>
     </header>
 
     <!-- Settings Panel -->
@@ -71,16 +70,29 @@
       </details>
     </section>
 
-    <section class="status-section">
-      <p id="status">Loading…</p>
-    </section>
-
-    <section class="interaction-section">
+    <!-- Control bar: status + talk button + emotion side by side -->
+    <section class="control-bar">
+      <div class="control-bar-status">
+        <p id="status">Loading…</p>
+      </div>
       <button id="talk-button" class="talk-button">
         🎤 Talk to Dekel
       </button>
-      
-      <!-- Fallback text input for browsers without Web Speech API -->
+      <div class="control-bar-emotion">
+        <div id="emotion-indicator" class="emotion-indicator" style="display: none;">
+          <div class="emotion-display">
+            <span id="emotion-emoji" class="emotion-emoji" aria-hidden="true">❓</span>
+            <div class="emotion-details">
+              <span id="emotion-label" class="emotion-label">neutral</span>
+              <span id="emotion-confidence" class="emotion-confidence">0%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Text input row -->
+    <section class="interaction-section">
       <div class="text-fallback">
         <input 
           type="text" 
@@ -92,26 +104,16 @@
       </div>
     </section>
 
-    <section class="transcript-section">
-      <h2>You said:</h2>
-      <div id="transcript" class="transcript-box" aria-live="polite"></div>
-    </section>
-
-    <section class="emotion-section">
-      <div id="emotion-indicator" class="emotion-indicator" style="display: none;">
-        <div class="emotion-display">
-          <span id="emotion-emoji" class="emotion-emoji" aria-hidden="true">❓</span>
-          <div class="emotion-details">
-            <span id="emotion-label" class="emotion-label">neutral</span>
-            <span id="emotion-confidence" class="emotion-confidence">0%</span>
-          </div>
-        </div>
+    <!-- Conversation boxes side by side -->
+    <section class="conversation-columns">
+      <div class="transcript-section">
+        <h2 class="box-label">You said:</h2>
+        <div id="transcript" class="transcript-box" aria-live="polite"></div>
       </div>
-    </section>
-
-    <section class="response-section">
-      <h2>Dekel says:</h2>
-      <div id="response" class="response-box" aria-live="polite" style="display: none;"></div>
+      <div class="response-section">
+        <h2 class="box-label">Dekel says:</h2>
+        <div id="response" class="response-box" aria-live="polite" style="display: none;"></div>
+      </div>
     </section>
 
     <!-- Conversation History -->
