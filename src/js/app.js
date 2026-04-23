@@ -125,6 +125,13 @@ function setupEventHandlers() {
     localStorage.setItem('dekel-api-key', key);
     ui.setApiStatus('configured');
     console.log('[App] API key configured and saved');
+
+    // Re-evaluate STT strategy — Whisper may now be supported with the new key
+    const sttPref = getSttPreference();
+    if (sttPref === 'whisper' && activeSttMode !== 'whisper' && whisperStt.isSupported()) {
+      initSttStrategy(sttPref);
+      console.log('[App] Switched to Whisper STT after API key was saved');
+    }
   });
   
   // Provider dropdown change
