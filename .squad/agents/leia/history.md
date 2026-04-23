@@ -123,6 +123,25 @@
 - `src/index.html` (new UI sections)
 - `src/css/styles.css` (chat + settings styles)
 
+### 2026-04-10 — Asymmetric Tone-Text Conflict Handling
+
+**Problem:** Sharon identified that tone-text conflicts are NOT symmetric. The previous prompt said "trust the words" in all conflicts, but the clinical reality is more nuanced:
+- Sad words + happy tone → tone is probably wrong (people rarely fake sadness)
+- Happy words + sad tone → the person may be masking distress behind cheerful words — this is clinically meaningful and should trigger a gentle check-in
+
+**Changes (conversation-engine.js):**
+- **SYSTEM_PROMPT:** Replaced the generic "trust the words" rule with asymmetric conflict handling instructions. Added the "people rarely fake sadness" heuristic.
+- **detectTextSentiment():** NEW exported function. Simple keyword matching against negative (sad, worried, overwhelmed, etc.) and positive (good, great, happy, etc.) word lists. Returns 'negative', 'positive', 'mixed', or 'neutral'.
+- **buildMismatchNote():** NEW exported function. Compares text sentiment vs voice tone. Returns a bracketed note for the LLM when they conflict: "tone likely inaccurate, trust the words" for neg-text/pos-tone, "check if masking" for pos-text/neg-tone.
+- **generateResponse():** Now calls detectTextSentiment + buildMismatchNote and appends mismatch notes to the user message when confidence ≥ 0.4.
+
+**Design decisions:**
+- Keyword matching is intentionally simple — it's a rough signal to help the LLM, not a production NLP pipeline
+- Mismatch notes are only appended when tone confidence is above the 0.4 threshold (same gating as tone hints)
+- Both functions are exported for testability
+
+**Tests:** All 204 tests passing.
+
 ### 2026-04-10 — STT Error Handler Button-Stuck Bug Fix
 
 **Bug:** When speech recognition hit a non-recoverable error (network, not-allowed, service-not-allowed), `isListening` was set to `false` but the Talk button remained in "🛑 Stop" state with the `listening` CSS class. User was stuck — clicking Stop called `stopListening()` which returned early because `isListening` was already false.
@@ -196,3 +215,34 @@
 **Tests:** All 188 tests passing after fix.
 
 **Key insight:** Browser speech APIs have multiple async race conditions that only manifest on the second use cycle. The combination of stale event handlers, Chrome-specific TTS bugs, and mic resource contention creates a "works once, fails twice" pattern that requires defense-in-depth fixes across all three modules.
+
+### 2026-04-10 — Emotion/Text Priority Fix in LLM Prompt
+
+**Bug:** Sharon said "I didn't feel good" but Dekel responded as if she was happy — because prosody analysis (incorrectly) detected a "happy" tone, and the LLM over-weighted the emotion metadata over the actual words.
+
+**Root cause:** The user message format put emotion metadata BEFORE the text (`[Voice tone: happy]` → `User: I didn't feel good`), and the system prompt had no instruction to prioritize text over tone.
+
+**Fixes applied (conversation-engine.js):**
+- **System prompt:** Added "Priority rule" section instructing the LLM that words are the primary signal, tone is secondary/noisy, and to trust words when they contradict tone.
+- **Message format:** Text now comes FIRST (`User: ...`), tone hint SECOND — position matters for LLM attention.
+- **Confidence-based filtering:** `<0.4` → omit tone entirely; `0.4–0.6` → mark as "uncertain"; `>0.6` → include as secondary signal with caveat.
+
+**Tests:** Updated 3 test assertions for new format. All 204 tests passing.
+
+**Key insight:** In LLM prompting, information position and framing dramatically affect how the model weighs signals. Putting noisy metadata before the primary content causes the model to anchor on it. Text (what the user actually said) is ground truth; prosody-derived tone is a noisy estimate that should be explicitly labeled as such.
+
+### 2026-04-23 — UI Layout Compaction (Above-the-Fold Conversation)
+
+**Problem:** The conversation text ("You said" / "Dekel says") was pushed below the fold by vertically stacked header, settings, status, button, and emotion sections. Users had to scroll to see the core interaction.
+
+**Changes (index.html + styles.css):**
+- **Compact header:** h1 reduced from 3rem → 2rem, subtitle moved inline with title (no separate `<p>`), margins/padding trimmed throughout.
+- **Horizontal control bar:** Status pill, Talk button, and Emotion indicator placed in a single flexbox row (`display: flex; gap: 1.5rem`), replacing 3 stacked sections (~200px → ~60px).
+- **Two-column conversation:** "You said" and "Dekel says" boxes placed side-by-side via CSS Grid (`grid-template-columns: 1fr 1fr`), saving another ~100px of vertical space.
+- **Reduced box sizes:** min-height 100px → 60px, padding 1.5rem → 1rem on transcript/response boxes.
+- **Wider layout:** `#app` max-width increased from 800px → 960px to accommodate the 2-column layout.
+- **Mobile responsive:** All horizontal layouts stack vertically below 640px via media query.
+
+**Preserved:** All element IDs (JS references), space theme colors/gradients, talk button prominence, accessibility features. No JS changes needed.
+
+**Tests:** All 204 tests passing.
