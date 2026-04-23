@@ -45,6 +45,56 @@ let model = PROVIDERS.groq.model;
 const conversationHistory = [];
 const MAX_HISTORY = 10;
 
+// Simple keyword lists for rough text-sentiment detection (used to flag tone-text mismatches)
+const NEGATIVE_KEYWORDS = [
+  'sad', 'bad', 'not good', 'terrible', 'awful', 'worried', 'scared', 'lonely',
+  'miss', 'hurt', 'struggle', 'difficult', 'hard', 'tired', 'exhausted',
+  'stressed', 'anxious', 'upset', 'angry', 'frustrated', 'depressed', 'alone',
+  'hopeless', 'helpless', 'confused', 'overwhelmed'
+];
+const POSITIVE_KEYWORDS = [
+  'good', 'great', 'fine', 'happy', 'wonderful', 'amazing', 'excellent', 'love',
+  'excited', 'glad', 'thankful', 'grateful', 'enjoying', 'fantastic', 'perfect',
+  'awesome'
+];
+const POSITIVE_TONES = ['happy', 'calm'];
+const NEGATIVE_TONES = ['sad', 'stressed'];
+
+/**
+ * Detect rough text sentiment from keywords.
+ * Returns 'negative', 'positive', or 'neutral'.
+ * @param {string} text
+ * @returns {string}
+ */
+export function detectTextSentiment(text) {
+  const lower = text.toLowerCase();
+  const hasNeg = NEGATIVE_KEYWORDS.some(kw => lower.includes(kw));
+  const hasPos = POSITIVE_KEYWORDS.some(kw => lower.includes(kw));
+  if (hasNeg && !hasPos) return 'negative';
+  if (hasPos && !hasNeg) return 'positive';
+  if (hasNeg && hasPos) return 'mixed';
+  return 'neutral';
+}
+
+/**
+ * Build a mismatch note when text sentiment and voice tone conflict.
+ * @param {string} textSentiment - 'positive', 'negative', 'mixed', or 'neutral'
+ * @param {string} emotion - detected voice tone
+ * @returns {string|null} A bracketed note, or null if no conflict
+ */
+export function buildMismatchNote(textSentiment, emotion) {
+  const toneIsPositive = POSITIVE_TONES.includes(emotion);
+  const toneIsNegative = NEGATIVE_TONES.includes(emotion);
+
+  if (textSentiment === 'negative' && toneIsPositive) {
+    return '[Note: words seem negative but tone reads positive — tone likely inaccurate, trust the words]';
+  }
+  if (textSentiment === 'positive' && toneIsNegative) {
+    return '[Note: words seem positive but tone reads negative — check if masking]';
+  }
+  return null;
+}
+
 // System prompt that defines Dekel's personality
 const SYSTEM_PROMPT = `You are Dekel, a supportive virtual psychologist for astronauts on a space station.
 You are part of an educational demo, so keep your language friendly and understandable.
@@ -52,8 +102,12 @@ You are part of an educational demo, so keep your language friendly and understa
 Priority rule — text vs. voice tone:
 - The user's WORDS are always the primary signal. Respond to what they actually said.
 - A [Voice tone hint] may follow the user's text. This comes from automated prosody analysis and can be inaccurate.
-- When tone contradicts the words (e.g., sad words + "happy" tone), TRUST THE WORDS.
 - If the tone is marked "uncertain" or has low confidence, give it very little weight.
+
+Tone-text conflict handling (asymmetric rules):
+- Sad/negative words + happy/calm tone → The tone is likely wrong. People rarely fake sadness. Respond to the sadness in their words.
+- Happy/positive words + sad/stressed tone → This mismatch is clinically meaningful. The person may be masking real distress behind cheerful words. Gently check in, e.g.: "You say things are fine, but I sense something might be weighing on you. How are you really doing?"
+- General principle: people rarely fake sadness, but often hide it behind cheerfulness. When in doubt, lean toward the more vulnerable signal.
 
 Your response structure:
 1. REFLECT + VALIDATE: Acknowledge what the person said and how they seem to be feeling.
@@ -125,6 +179,7 @@ export async function generateResponse({ text, emotion, confidence }) {
   
   // Build the user message — text first (primary signal), tone second (noisy signal)
   const confidencePercent = Math.round(confidence * 100);
+  const textSentiment = detectTextSentiment(text);
   let userMessage;
   if (confidence < 0.4) {
     // Low confidence — tone detection is unreliable, omit it entirely
@@ -135,6 +190,14 @@ export async function generateResponse({ text, emotion, confidence }) {
   } else {
     // Higher confidence — include as secondary signal
     userMessage = `User: ${text}\n[Voice tone hint: "${emotion}", confidence: ${confidencePercent}% — secondary signal from automated prosody analysis. The user's words are the primary signal.]`;
+  }
+
+  // Append mismatch note if tone and text sentiment conflict (only when tone is included)
+  if (confidence >= 0.4) {
+    const mismatchNote = buildMismatchNote(textSentiment, emotion);
+    if (mismatchNote) {
+      userMessage += `\n${mismatchNote}`;
+    }
   }
   
   // Build messages array for the API
@@ -275,5 +338,7 @@ export default {
   setProvider,
   getProvider,
   getProviders,
+  detectTextSentiment,
+  buildMismatchNote,
   PROVIDERS
 };
