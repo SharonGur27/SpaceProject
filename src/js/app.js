@@ -217,7 +217,8 @@ function setupEventHandlers() {
  * Start listening to user input
  */
 async function startListening() {
-  console.log('[App] Starting listening session...');
+  console.log('[App] Starting listening session…');
+  console.log('[App]   app.isListening:', isListening);
   
   try {
     isListening = true;
@@ -227,6 +228,7 @@ async function startListening() {
     
     // Start microphone
     await mic.start();
+    console.log('[App]   mic started, audioContext state:', mic.getAudioContext()?.state);
     
     // Create analyser node for audio feature extraction
     const audioContext = mic.getAudioContext();
@@ -248,7 +250,8 @@ async function startListening() {
     audioFeatures.init(analyserNode, audioContext);
     audioFeatures.startExtraction();
     
-    // Start speech recognition
+    // Start speech recognition (small delay to avoid mic contention)
+    await new Promise(resolve => setTimeout(resolve, 100));
     stt.start();
     
     console.log('[App] Listening session started');
@@ -289,9 +292,10 @@ async function stopListening() {
   } catch (error) {
     console.error('[App] Error during processing:', error);
     ui.showError('Sorry, something went wrong.');
-    ui.setStatus('ready');
   } finally {
     cleanup();
+    // Backstop: always return to ready so the button is never stuck
+    ui.setStatus('ready');
   }
 }
 

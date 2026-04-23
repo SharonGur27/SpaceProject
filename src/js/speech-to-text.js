@@ -30,6 +30,7 @@
 let recognition = null;          // The SpeechRecognition instance
 let isListening = false;         // Whether we're actively listening
 let shouldRestart = false;       // Whether to auto-restart after the browser stops
+let sessionId = 0;               // Incremented on each start(); stale handlers check this
 
 // Callback storage
 let interimResultCallback = null;
@@ -110,6 +111,10 @@ function start(mediaStream) {
   networkRetryCount = 0;
   restartCount = 0;
   lastResultTime = Date.now();
+  sessionId++;
+
+  const mySessionId = sessionId;
+  console.log(`[STT] Starting session #${mySessionId}`);
 
   shouldRestart = true;
   createAndStartRecognition();
@@ -200,6 +205,9 @@ function createAndStartRecognition() {
     recognition = null;
   }
 
+  // Capture current session so stale handlers from old instances are ignored
+  const mySessionId = sessionId;
+
   recognition = new SpeechRecognition();
 
   // ── Configuration ────────────────────────────────────────────
@@ -215,6 +223,9 @@ function createAndStartRecognition() {
    * Each result can be "interim" (still changing) or "final" (confirmed).
    */
   recognition.onresult = (event) => {
+    // Ignore events from a stale session
+    if (mySessionId !== sessionId) return;
+
     // We got results — reset backoff and silence timer since things are working
     restartDelay = RESTART_DELAY_INITIAL;
     networkRetryCount = 0;
@@ -246,6 +257,12 @@ function createAndStartRecognition() {
    * was a network issue. If we're in continuous mode, we restart.
    */
   recognition.onend = () => {
+    // Ignore events from a stale session
+    if (mySessionId !== sessionId) {
+      console.log(`[STT] Ignoring stale onend from session #${mySessionId} (current: #${sessionId})`);
+      return;
+    }
+
     isListening = false;
     clearSilenceTimer();
 
@@ -259,7 +276,7 @@ function createAndStartRecognition() {
       }
 
       setTimeout(() => {
-        if (shouldRestart) {
+        if (shouldRestart && mySessionId === sessionId) {
           // Create a fresh instance each time to avoid browser quirks
           createAndStartRecognition();
         }
@@ -273,18 +290,15 @@ function createAndStartRecognition() {
   /**
    * Handle recognition errors.
    * Some errors are recoverable (network glitch), others aren't (permission denied).
-   *
-   * Strategy:
-   *   - no-speech / aborted: harmless, let auto-restart handle it
-   *   - network / audio-capture: retry up to NETWORK_RETRY_MAX times
-   *   - not-allowed / service-not-allowed: give up immediately
    */
   recognition.onerror = (event) => {
+    // Ignore events from a stale session
+    if (mySessionId !== sessionId) return;
+
     console.warn(`[STT] Error: "${event.error}" (network retries: ${networkRetryCount}/${NETWORK_RETRY_MAX})`);
 
     // 'no-speech' means the user is quiet — not really an error.
     // 'aborted' means we called stop() — also expected.
-    // For these, we just let auto-restart handle it.
     if (event.error === 'no-speech' || event.error === 'aborted') {
       return;
     }
