@@ -62,7 +62,7 @@ async function init() {
   }
   
   // ── STT strategy selection ─────────────────────────────────────
-  const sttPref = localStorage.getItem('dekel-stt-provider') || 'auto';
+  const sttPref = localStorage.getItem('dekel-stt-provider') || 'whisper';
   initSttStrategy(sttPref);
   
   // Check that at least one STT path is usable
@@ -438,7 +438,7 @@ function cleanup() {
  * @returns {'webspeech'|'whisper'|'auto'}
  */
 function getSttPreference() {
-  return localStorage.getItem('dekel-stt-provider') || 'auto';
+  return localStorage.getItem('dekel-stt-provider') || 'whisper';
 }
 
 /**
