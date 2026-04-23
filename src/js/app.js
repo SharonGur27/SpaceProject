@@ -172,10 +172,14 @@ function setupEventHandlers() {
 
     if (isNonRecoverable) {
       isListening = false;
+      ui.setStatus('ready');
       ui.showSpeechUnavailable();
       cleanup();
     } else {
+      isListening = false;
+      ui.setStatus('ready');
       ui.showError(error.message);
+      cleanup();
     }
   });
   

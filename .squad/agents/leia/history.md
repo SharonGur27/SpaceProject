@@ -122,3 +122,21 @@
 - `src/js/ui.js` (settings panel + chat history)
 - `src/index.html` (new UI sections)
 - `src/css/styles.css` (chat + settings styles)
+
+### 2026-04-10 — STT Error Handler Button-Stuck Bug Fix
+
+**Bug:** When speech recognition hit a non-recoverable error (network, not-allowed, service-not-allowed), `isListening` was set to `false` but the Talk button remained in "🛑 Stop" state with the `listening` CSS class. User was stuck — clicking Stop called `stopListening()` which returned early because `isListening` was already false.
+
+**Root cause:** `showSpeechUnavailable()` and `showError()` in ui.js only updated status text, not button state.
+
+**Fix (app.js):**
+- Non-recoverable path: Added `ui.setStatus('ready')` before `ui.showSpeechUnavailable()` to reset button
+- Recoverable path: Added `isListening = false`, `ui.setStatus('ready')`, and `cleanup()` — the same bug existed here too
+
+**Fix (ui.js — defensive):**
+- `showSpeechUnavailable()` now resets the talk button (text, class, disabled) before showing its message
+- `showError()` now also resets the talk button — any error display ensures the user isn't stuck
+
+**Pattern:** Error display functions in ui.js should always ensure the button is in a clickable, non-listening state. Defense in depth: both the caller (app.js) and the UI function (ui.js) reset the button.
+
+**Tests:** All 188 tests passing after fix.

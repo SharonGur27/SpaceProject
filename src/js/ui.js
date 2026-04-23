@@ -387,6 +387,13 @@ export function clearContent() {
  * @param {string} message - Error message
  */
 export function showError(message) {
+  // Defensive: ensure button is reset to non-listening state
+  if (elements.talkButton) {
+    elements.talkButton.textContent = '🎤 Talk to Dekel';
+    elements.talkButton.classList.remove('listening');
+    elements.talkButton.disabled = false;
+  }
+
   if (elements.status) {
     elements.status.textContent = `⚠️ ${message}`;
     elements.status.style.color = '#F44336';
@@ -419,6 +426,13 @@ export function setResponseSource(source, reason) {
 export function showSpeechUnavailable(message) {
   const fallbackMsg = message ||
     '🎤 Speech unavailable — type your message below!';
+
+  // Defensive: ensure button is reset to non-listening state
+  if (elements.talkButton) {
+    elements.talkButton.textContent = '🎤 Talk to Dekel';
+    elements.talkButton.classList.remove('listening');
+    elements.talkButton.disabled = false;
+  }
 
   // Show in the response area so it's prominent
   if (elements.responseArea) {
