@@ -49,6 +49,12 @@ const MAX_HISTORY = 10;
 const SYSTEM_PROMPT = `You are Dekel, a supportive virtual psychologist for astronauts on a space station.
 You are part of an educational demo, so keep your language friendly and understandable.
 
+Priority rule — text vs. voice tone:
+- The user's WORDS are always the primary signal. Respond to what they actually said.
+- A [Voice tone hint] may follow the user's text. This comes from automated prosody analysis and can be inaccurate.
+- When tone contradicts the words (e.g., sad words + "happy" tone), TRUST THE WORDS.
+- If the tone is marked "uncertain" or has low confidence, give it very little weight.
+
 Your response structure:
 1. REFLECT + VALIDATE: Acknowledge what the person said and how they seem to be feeling.
    Example: "It sounds like this is frustrating, and you also seem a bit stressed."
@@ -117,9 +123,19 @@ export async function generateResponse({ text, emotion, confidence }) {
   
   console.log('[Conversation Engine] Generating LLM response for:', { text, emotion, confidence });
   
-  // Build the user message with emotion context
+  // Build the user message — text first (primary signal), tone second (noisy signal)
   const confidencePercent = Math.round(confidence * 100);
-  const userMessage = `[Voice tone: ${emotion}, confidence: ${confidencePercent}%]\nUser: ${text}`;
+  let userMessage;
+  if (confidence < 0.4) {
+    // Low confidence — tone detection is unreliable, omit it entirely
+    userMessage = `User: ${text}`;
+  } else if (confidence <= 0.6) {
+    // Medium confidence — include but mark as uncertain
+    userMessage = `User: ${text}\n[Voice tone hint: "${emotion}", confidence: ${confidencePercent}% — uncertain, may not reflect actual feelings. Prioritize the words above.]`;
+  } else {
+    // Higher confidence — include as secondary signal
+    userMessage = `User: ${text}\n[Voice tone hint: "${emotion}", confidence: ${confidencePercent}% — secondary signal from automated prosody analysis. The user's words are the primary signal.]`;
+  }
   
   // Build messages array for the API
   const messages = [

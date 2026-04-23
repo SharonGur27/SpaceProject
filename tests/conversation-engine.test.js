@@ -258,7 +258,10 @@ describe('conversation-engine', () => {
       const userMessage = body.messages.find(m => m.role === 'user');
       
       expect(userMessage).toBeDefined();
-      expect(userMessage.content).toContain('[Voice tone: stressed, confidence: 75%]');
+      // High confidence (0.75) — tone included as secondary hint
+      expect(userMessage.content).toContain('[Voice tone hint: "stressed", confidence: 75%');
+      // Text should appear BEFORE the tone hint
+      expect(userMessage.content.indexOf('I feel stressed')).toBeLessThan(userMessage.content.indexOf('[Voice tone hint'));
     });
 
     it('includes user text in the message', async () => {
@@ -971,7 +974,9 @@ describe('conversation-engine', () => {
       const body = JSON.parse(callArgs.body);
       const userMessage = body.messages.find(m => m.role === 'user');
       
-      expect(userMessage.content).toContain('confidence: 0%');
+      // Confidence 0 is below 0.4 threshold — no tone metadata at all
+      expect(userMessage.content).not.toContain('[Voice tone');
+      expect(userMessage.content).toContain('User: Test');
     });
 
     it('handles 1.0 confidence value', async () => {
@@ -1001,7 +1006,9 @@ describe('conversation-engine', () => {
       const body = JSON.parse(callArgs.body);
       const userMessage = body.messages.find(m => m.role === 'user');
       
+      // High confidence (1.0) — tone included as secondary signal
       expect(userMessage.content).toContain('confidence: 100%');
+      expect(userMessage.content).toContain('[Voice tone hint: "happy"');
     });
   });
 
