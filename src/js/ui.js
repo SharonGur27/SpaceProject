@@ -206,7 +206,6 @@ export function setResponse(text) {
   if (!elements.responseArea) return;
   
   elements.responseArea.textContent = text;
-  elements.responseArea.style.display = 'block';
 }
 
 /**
@@ -392,7 +391,6 @@ export function clearContent() {
   }
   if (elements.responseArea) {
     elements.responseArea.textContent = '';
-    elements.responseArea.style.display = 'none';
   }
 }
 
@@ -451,7 +449,6 @@ export function showSpeechUnavailable(message) {
   // Show in the response area so it's prominent
   if (elements.responseArea) {
     elements.responseArea.textContent = fallbackMsg;
-    elements.responseArea.style.display = 'block';
   }
 
   // Also update the status bar

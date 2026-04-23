@@ -451,6 +451,13 @@ h2 {
   font-weight: 500;
 }
 
+.response-box:empty::before {
+  content: 'Dekel\'s response will appear here...';
+  color: #6b7280;
+  font-style: italic;
+  font-weight: 400;
+}
+
 /* === Conversation History === */
 .conversation-section {
   margin-top: 1rem;
