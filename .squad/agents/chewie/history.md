@@ -114,3 +114,45 @@
   - Lowered SILENCE_THRESHOLD from 0.01 to 0.005 (browser AGC produces quieter signals)
 
 - **Verified:** All 43 tests still pass. Manual testing with 6 different feature vectors confirms stressed, happy, sad, calm, and neutral can all win depending on input prosody.
+
+### 2026-04-22 — Conversation Engine Integration: Emotion Data Feeds Into LLM Prompts
+
+**New phase integration:**
+- Emotion detector output (label + confidence) now feeds into conversation-engine.js as part of the LLM API request
+- The LLM system prompt instructs Dekel to consider the detected emotion as context ("User's emotion: [emotion] at [confidence]% confidence")
+- This enables LLM to weight responses based on prosody (e.g., respond with more urgency to stressed vs calm tones)
+- Fallback template selection also uses emotion label, maintaining behavior parity when API unavailable
+
+**For the team:**
+- Audio-to-emotion pipeline unchanged (still synchronous, all tests passing)
+- Emotion output now has broader impact: feeds both templates AND LLM context
+- Leia handles the LLM integration; Chewie's modules remain focused on audio analysis
+- Lando's emotion-detector tests still fully valid; new tests cover emotion → LLM flow
+
+### 2026-04-22 — Whisper STT via Groq API (Web Speech Fallback)
+
+- **Problem:** Chrome's Web Speech API produces frequent `[STT] Error: "network"` errors — Google's speech service is unreliable for a space-station demo.
+- **Solution:** New module `src/js/whisper-stt.js` that records audio via MediaRecorder and sends it to Groq's Whisper endpoint (`whisper-large-v3-turbo`) for transcription.
+
+- **Files created:**
+  - `src/js/whisper-stt.js` — MediaRecorder-based audio capture → Groq Whisper API transcription. Same callback interface as `speech-to-text.js` (onFinalResult, onError, isSupported). Uses `audio/webm;codecs=opus` format. Reads API key from `localStorage('dekel-api-key')`.
+  - `tests/whisper-stt.test.js` — 16 tests covering: isSupported checks, start/stop lifecycle, API success/failure, empty transcript, missing API key, network errors, FormData construction.
+
+- **Files modified:**
+  - `src/js/app.js` — Added STT strategy selection via `localStorage('dekel-stt-provider')`:
+    - `'auto'` (default): Starts with Web Speech. After 2+ network errors, auto-switches to Whisper for the rest of the session.
+    - `'whisper'`: Always use Whisper (skip Web Speech entirely).
+    - `'webspeech'`: Always use Web Speech (original behavior).
+  - Whisper mode shows "🎙️ Recording…" status (no interim results since Whisper is batch).
+  - No changes to `mic-input.js` — `getMediaStream()` already existed.
+
+- **Key technical decisions:**
+  - **No interim results in Whisper mode:** Whisper is batch transcription, so we show a recording indicator instead of live text.
+  - **Auto-switch threshold = 2 network errors:** Conservative enough to avoid false switches, fast enough to recover from persistent Google outages.
+  - **API key reuse:** Same `dekel-api-key` used for both LLM conversations and Whisper transcription (Groq serves both).
+  - **Audio format:** `audio/webm;codecs=opus` — widely supported in Chrome/Edge, accepted by Groq Whisper. Falls back through `ogg`, `mp4` if webm unavailable.
+  - **No new dependencies:** Pure browser `fetch()` + `FormData` + `MediaRecorder`.
+
+- **For Leia:** The strategy preference is read from `localStorage('dekel-stt-provider')`. If you want to add a UI toggle in the settings panel, use values `'webspeech'`, `'whisper'`, or `'auto'`.
+- **For Lando:** 16 new tests added. All 204 tests pass. Whisper module is testable standalone with fetch/MediaRecorder mocks.
+- **Verification:** All 204 tests passing (188 original + 16 new).

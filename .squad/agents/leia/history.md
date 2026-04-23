@@ -78,3 +78,180 @@
 - Calming space theme reduces anxiety
 - Supportive responses tailored to astronaut context
 - Accessible (keyboard nav, screen reader support, reduced motion)
+
+### 2026-04-09 — LLM Conversation Engine Integration
+
+**Delivered Files:**
+- `src/js/conversation-engine.js` — NEW: LLM API integration module for OpenAI Chat Completions API. Manages conversation history (10 turns), configurable API key/endpoint/model. System prompt defines Dekel's therapeutic personality (reflect+validate → respond to content → open question). Default model: gpt-4o-mini (cost-effective).
+- `src/js/dekel-brain.js` — REFACTORED: Now async, tries LLM first (if configured), falls back to templates on error or when no API key. Exported `generateFallbackResponse()` preserves all original template logic. `setEngine()` for testing.
+- `src/js/app.js` — UPDATED: Handles async brain.generateResponse() with await. Initializes conversation engine with sessionStorage API key on load. Wires up API key submit and clear history handlers. Adds messages to history via ui.addToHistory().
+- `src/js/ui.js` — UPDATED: Added settings panel for API key input, conversation history display with chat-style messages, API status indicator. New exports: onApiKeySubmit(), onClearHistory(), addToHistory(), clearConversationHistory(), setApiStatus().
+- `src/index.html` — UPDATED: Added collapsible settings section with API key input and warning. Added conversation history section with clear button. Kept existing emotion indicator and response sections.
+- `src/css/styles.css` — UPDATED: Styled settings panel (collapsible details, input row, status indicator), conversation history (chat bubbles, user vs dekel styling, scrollbar), responsive mobile styles.
+
+**Architecture Decisions:**
+- **LLM-first with graceful fallback:** Always try LLM if API key is configured. On error (network, rate limit, etc.), automatically fall back to template-based responses. App works perfectly without API key.
+- **Context-aware responses:** LLM receives both emotion label AND user's actual words, plus conversation history (10 turns). System prompt emphasizes Motivational Interviewing techniques (reflection, validation, open questions).
+- **Security/Privacy:** API key stored in sessionStorage (not localStorage) — persists within browser session only. Warning displayed in UI. Direct browser-to-API calls (OpenAI supports CORS).
+- **Conversation history UI:** Separate scrollable chat display shows full back-and-forth. User messages (blue, right-aligned) vs Dekel messages (purple, left-aligned). Auto-scrolls to latest. Clear button resets both UI and engine history.
+- **Model selection:** gpt-4o-mini as default — fast, cheap, sufficient for educational demo. Configurable via engine.configure().
+- **Token limits:** max_tokens: 200 to keep responses concise (3-4 sentences). Temperature: 0.7 for natural variation. Presence penalty: 0.6, frequency penalty: 0.3 to reduce repetition.
+
+**Integration Points:**
+- sessionStorage key: 'dekel-api-key' — auto-loaded on init
+- Conversation history max: 10 turns (20 messages: user+assistant pairs)
+- System prompt defines Dekel's personality: supportive, uses MI techniques, 12-year-old-friendly language
+- Error handling: LLM failures trigger console.warn + automatic fallback, no user-facing error
+- Text fallback path also calls processTranscript() and adds to history
+
+**Key Patterns:**
+- Async/await throughout: generateResponse is now Promise-based
+- Graceful degradation: full functionality without API key
+- Separation of concerns: conversation-engine.js is fully testable in isolation
+- Progressive enhancement: existing template responses preserved as fallback
+
+**Testing:**
+- All existing tests pass (7 test files, 28 dekel-brain tests, 37 conversation-engine tests)
+- Tests verify: async behavior, fallback logic, configuration, API call structure
+- console.log statements show LLM vs fallback usage
+
+**Key Files:**
+- `src/js/conversation-engine.js` (new)
+- `src/js/dekel-brain.js` (refactored to async + LLM integration)
+- `src/js/app.js` (async handling + engine config)
+- `src/js/ui.js` (settings panel + chat history)
+- `src/index.html` (new UI sections)
+- `src/css/styles.css` (chat + settings styles)
+
+### 2026-04-10 — Asymmetric Tone-Text Conflict Handling
+
+**Problem:** Sharon identified that tone-text conflicts are NOT symmetric. The previous prompt said "trust the words" in all conflicts, but the clinical reality is more nuanced:
+- Sad words + happy tone → tone is probably wrong (people rarely fake sadness)
+- Happy words + sad tone → the person may be masking distress behind cheerful words — this is clinically meaningful and should trigger a gentle check-in
+
+**Changes (conversation-engine.js):**
+- **SYSTEM_PROMPT:** Replaced the generic "trust the words" rule with asymmetric conflict handling instructions. Added the "people rarely fake sadness" heuristic.
+- **detectTextSentiment():** NEW exported function. Simple keyword matching against negative (sad, worried, overwhelmed, etc.) and positive (good, great, happy, etc.) word lists. Returns 'negative', 'positive', 'mixed', or 'neutral'.
+- **buildMismatchNote():** NEW exported function. Compares text sentiment vs voice tone. Returns a bracketed note for the LLM when they conflict: "tone likely inaccurate, trust the words" for neg-text/pos-tone, "check if masking" for pos-text/neg-tone.
+- **generateResponse():** Now calls detectTextSentiment + buildMismatchNote and appends mismatch notes to the user message when confidence ≥ 0.4.
+
+**Design decisions:**
+- Keyword matching is intentionally simple — it's a rough signal to help the LLM, not a production NLP pipeline
+- Mismatch notes are only appended when tone confidence is above the 0.4 threshold (same gating as tone hints)
+- Both functions are exported for testability
+
+**Tests:** All 204 tests passing.
+
+### 2026-04-10 — STT Error Handler Button-Stuck Bug Fix
+
+**Bug:** When speech recognition hit a non-recoverable error (network, not-allowed, service-not-allowed), `isListening` was set to `false` but the Talk button remained in "🛑 Stop" state with the `listening` CSS class. User was stuck — clicking Stop called `stopListening()` which returned early because `isListening` was already false.
+
+**Root cause:** `showSpeechUnavailable()` and `showError()` in ui.js only updated status text, not button state.
+
+**Fix (app.js):**
+- Non-recoverable path: Added `ui.setStatus('ready')` before `ui.showSpeechUnavailable()` to reset button
+- Recoverable path: Added `isListening = false`, `ui.setStatus('ready')`, and `cleanup()` — the same bug existed here too
+
+**Fix (ui.js — defensive):**
+- `showSpeechUnavailable()` now resets the talk button (text, class, disabled) before showing its message
+- `showError()` now also resets the talk button — any error display ensures the user isn't stuck
+
+**Pattern:** Error display functions in ui.js should always ensure the button is in a clickable, non-listening state. Defense in depth: both the caller (app.js) and the UI function (ui.js) reset the button.
+
+**Tests:** All 188 tests passing after fix.
+
+### 2026-04-10 — STT Reliability Improvements (Backoff, Retry, Feedback)
+
+**Problem:** Sharon reported speech recognition "sometimes works and sometimes doesn't." Root causes identified:
+1. Fixed 300ms restart delay caused hammering of Google's speech servers after repeated restarts
+2. A single transient network error immediately showed "speech unavailable" with no retry
+3. Stale SpeechRecognition instances after errors caused unpredictable behavior in Chrome
+4. No silence detection — recognition could silently stall without user feedback
+5. No user feedback during reconnection — users saw nothing between "working" and "failed"
+
+**Improvements (speech-to-text.js):**
+- **Exponential backoff:** Restart delay grows from 300ms → 5s (1.5× multiplier, capped). Resets to 300ms on successful results.
+- **Network retry:** 3 attempts for transient errors (network, audio-capture) before reporting failure. Previously 1 error = immediate death.
+- **Fresh instances:** New SpeechRecognition object created on every restart, not just on initial start(). Chrome has bugs with reused instances after errors.
+- **Silence timeout:** 15-second timer restarts recognition proactively if no results arrive. Catches silent connection drops.
+- **onStatusChange callback:** New API — notifies the app with `{ state: 'reconnecting'|'failed', attempt, maxAttempts, reason }` so UI can show appropriate feedback.
+- **Diagnostic logging:** All console messages include retry counts, timing info, and restart numbers.
+
+**Improvements (app.js):**
+- Wired `stt.onStatusChange()` to show "🔄 Reconnecting speech…" during retries
+- Simplified error handler — network errors only reach it after retries are exhausted
+
+**Improvements (ui.js):**
+- Added `setStatusText(text, color)` for custom one-off status messages (not tied to standard states)
+
+**Tests:** Updated network error test to verify retry behavior (4 errors needed to trigger callback). All 188 tests passing.
+
+**Key insight:** The Web Speech API sends audio to Google's servers. It's fundamentally network-dependent. Most "intermittent failures" are transient network glitches that resolve on retry. The old code treated every error as fatal.
+
+### 2026-04-10 — Speech Recognition Second-Session Failure Fix
+
+**Bug:** Speech recognition worked on first Talk press, but after stopping and pressing Talk again, STT started but produced no words. 100% reproducible.
+
+**Root causes identified (4 interacting issues):**
+
+1. **Chrome TTS `onend` dropout:** For long utterances (>15s), Chrome drops the `onend` event entirely. `tts.speak()` Promise never resolves, `processTranscript` hangs, button stays disabled at 'speaking' — user can never press Talk again.
+
+2. **Stale STT `onend` state corruption:** `stt.stop()` fires `recognition.stop()` which triggers `onend` asynchronously. If the old `onend` fires after a new `stt.start()` has set `isListening = true`, it overwrites it to `false`, breaking the new session.
+
+3. **processTranscript error leaves status stuck:** If brain or TTS throws, the catch block set status to 'ready' — but only in the catch. If TTS hung (cause #1), status stayed at 'speaking' forever.
+
+4. **getUserMedia + SpeechRecognition mic contention:** On second call, Chrome briefly conflicts between the new getUserMedia stream and SpeechRecognition's internal mic access.
+
+**Fixes applied:**
+
+- **`text-to-speech.js`:** Added 30s watchdog timeout via `Promise.race()` that force-resolves `speak()` and calls `speechSynthesis.cancel()`. Added Chrome keepalive workaround (`speechSynthesis.pause(); speechSynthesis.resume()` every 10s during speech). Used `settleOnce` pattern to prevent double-resolution of the Promise.
+
+- **`speech-to-text.js`:** Added `sessionId` counter, incremented on each `start()`. All event handlers (`onresult`, `onend`, `onerror`) capture their session's ID in closure and ignore events if it doesn't match the current `sessionId`. Auto-restart `setTimeout` also checks before proceeding.
+
+- **`app.js` `stopListening()`:** Moved `ui.setStatus('ready')` into the `finally` block as a guaranteed backstop — the button can never get permanently stuck regardless of what fails.
+
+- **`app.js` `startListening()`:** Added 100ms delay between `mic.start()` and `stt.start()` to avoid mic contention. Added detailed console logging (app isListening state, audioContext state) for future debugging.
+
+**Tests:** All 188 tests passing after fix.
+
+**Key insight:** Browser speech APIs have multiple async race conditions that only manifest on the second use cycle. The combination of stale event handlers, Chrome-specific TTS bugs, and mic resource contention creates a "works once, fails twice" pattern that requires defense-in-depth fixes across all three modules.
+
+### 2026-04-10 — Emotion/Text Priority Fix in LLM Prompt
+
+**Bug:** Sharon said "I didn't feel good" but Dekel responded as if she was happy — because prosody analysis (incorrectly) detected a "happy" tone, and the LLM over-weighted the emotion metadata over the actual words.
+
+**Root cause:** The user message format put emotion metadata BEFORE the text (`[Voice tone: happy]` → `User: I didn't feel good`), and the system prompt had no instruction to prioritize text over tone.
+
+**Fixes applied (conversation-engine.js):**
+- **System prompt:** Added "Priority rule" section instructing the LLM that words are the primary signal, tone is secondary/noisy, and to trust words when they contradict tone.
+- **Message format:** Text now comes FIRST (`User: ...`), tone hint SECOND — position matters for LLM attention.
+- **Confidence-based filtering:** `<0.4` → omit tone entirely; `0.4–0.6` → mark as "uncertain"; `>0.6` → include as secondary signal with caveat.
+
+**Tests:** Updated 3 test assertions for new format. All 204 tests passing.
+
+**Key insight:** In LLM prompting, information position and framing dramatically affect how the model weighs signals. Putting noisy metadata before the primary content causes the model to anchor on it. Text (what the user actually said) is ground truth; prosody-derived tone is a noisy estimate that should be explicitly labeled as such.
+
+### 2026-04-23 — UI Layout Compaction (Above-the-Fold Conversation)
+
+**Problem:** The conversation text ("You said" / "Dekel says") was pushed below the fold by vertically stacked header, settings, status, button, and emotion sections. Users had to scroll to see the core interaction.
+
+**Changes (index.html + styles.css):**
+- **Compact header:** h1 reduced from 3rem → 2rem, subtitle moved inline with title (no separate `<p>`), margins/padding trimmed throughout.
+- **Horizontal control bar:** Status pill, Talk button, and Emotion indicator placed in a single flexbox row (`display: flex; gap: 1.5rem`), replacing 3 stacked sections (~200px → ~60px).
+- **Two-column conversation:** "You said" and "Dekel says" boxes placed side-by-side via CSS Grid (`grid-template-columns: 1fr 1fr`), saving another ~100px of vertical space.
+- **Reduced box sizes:** min-height 100px → 60px, padding 1.5rem → 1rem on transcript/response boxes.
+- **Wider layout:** `#app` max-width increased from 800px → 960px to accommodate the 2-column layout.
+- **Mobile responsive:** All horizontal layouts stack vertically below 640px via media query.
+
+**Preserved:** All element IDs (JS references), space theme colors/gradients, talk button prominence, accessibility features. No JS changes needed.
+
+**Tests:** All 204 tests passing.
+
+### 2026-04-23 — UI Tweaks: Vertical Layout, Longer Responses, Emotion Badge
+**Problem:** Sharon found the side-by-side transcript/response layout too cramped for longer text, Dekel's responses too terse (3-4 sentence limit), and the emotion indicator taking unnecessary space in the control bar.
+**Changes:**
+- **conversation-engine.js:** Changed response length guidance from 3-4 sentences max to 4-8 sentences and RESPOND TO CONTENT from 1-2 sentences to 2-4 sentences.
+- **index.html:** Stacked transcript/response boxes vertically. Moved emotion indicator into transcript box as a badge overlay.
+- **styles.css:** Replaced 2-column grid with flex column layout. Restyled emotion indicator as a compact pill badge.
+**Preserved:** All element IDs for JS references, compact header, horizontal control bar, mobile responsive breakpoints.
+**Tests:** All 204 tests passing.

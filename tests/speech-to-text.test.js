@@ -220,6 +220,17 @@ describe('speech-to-text', () => {
       const cb = vi.fn();
       stt.onError(cb);
       stt.start();
+
+      // First network error: should NOT fire callback (retry in progress)
+      instance.onerror({ error: 'network' });
+      expect(cb).not.toHaveBeenCalled();
+
+      // Second and third: still retrying
+      instance.onerror({ error: 'network' });
+      instance.onerror({ error: 'network' });
+      expect(cb).not.toHaveBeenCalled();
+
+      // Fourth network error exceeds retry limit (3) → fires error callback
       instance.onerror({ error: 'network' });
       expect(cb).toHaveBeenCalled();
       expect(cb.mock.calls[0][0].message).toContain('network');

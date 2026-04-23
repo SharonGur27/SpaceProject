@@ -32,11 +32,17 @@ const EMOTION_PRESETS = {
   neutral:  { pitch: 1.0, rate: 0.95 }
 };
 
+// ── Constants ──────────────────────────────────────────────────────
+
+const WATCHDOG_TIMEOUT_MS = 60000;    // Force-resolve speak() after 60s (Chrome onend bug)
+const KEEPALIVE_INTERVAL_MS = 10000;  // Chrome drops onend for long utterances; pulse every 10s
+
 // ── State ──────────────────────────────────────────────────────────
 
 let speaking = false;           // Whether Dekel is currently speaking
 let selectedVoice = null;       // The voice we've chosen to use
 let voicesLoaded = false;       // Whether the browser's voice list is ready
+let keepaliveTimer = null;      // Chrome pause/resume keepalive interval
 
 // Callback storage
 let startCallback = null;
@@ -112,7 +118,7 @@ if (typeof window !== 'undefined' && window.speechSynthesis) {
  * @returns {Promise<void>} Resolves when speech finishes.
  */
 function speak(text, options = {}) {
-  return new Promise((resolve, reject) => {
+  const speakPromise = new Promise((resolve, reject) => {
     // Safety check: is SpeechSynthesis available?
     if (typeof window === 'undefined' || !window.speechSynthesis) {
       console.error('[text-to-speech] SpeechSynthesis not available.');
@@ -142,10 +148,20 @@ function speak(text, options = {}) {
     utterance.rate = options.rate ?? preset.rate;
     utterance.volume = 1.0;
 
+    let settled = false;
+    function settleOnce(fn) {
+      if (!settled) {
+        settled = true;
+        clearKeepalive();
+        fn();
+      }
+    }
+
     // ── Event Handlers ─────────────────────────────────────────
 
     utterance.onstart = () => {
       speaking = true;
+      startKeepalive();
       console.log('[text-to-speech] Speaking:', text.substring(0, 50) + (text.length > 50 ? '…' : ''));
       if (startCallback) {
         startCallback(text);
@@ -154,10 +170,12 @@ function speak(text, options = {}) {
 
     utterance.onend = () => {
       speaking = false;
-      if (endCallback) {
-        endCallback(text);
-      }
-      resolve();
+      settleOnce(() => {
+        if (endCallback) {
+          endCallback(text);
+        }
+        resolve();
+      });
     };
 
     utterance.onerror = (event) => {
@@ -165,12 +183,12 @@ function speak(text, options = {}) {
 
       // 'interrupted' and 'cancelled' happen when we call stop() — not real errors
       if (event.error === 'interrupted' || event.error === 'canceled') {
-        resolve();
+        settleOnce(() => resolve());
         return;
       }
 
       console.error('[text-to-speech] Error:', event.error);
-      reject(new Error(`Speech synthesis error: ${event.error}`));
+      settleOnce(() => reject(new Error(`Speech synthesis error: ${event.error}`)));
     };
 
     // ── Speak! ─────────────────────────────────────────────────
@@ -182,6 +200,48 @@ function speak(text, options = {}) {
       window.speechSynthesis.speak(utterance);
     }, 50);
   });
+
+  // Watchdog: if onend never fires (Chrome bug for long utterances >15s),
+  // force-resolve after WATCHDOG_TIMEOUT_MS and cancel the stuck speech.
+  const watchdog = new Promise((resolve) => {
+    setTimeout(() => {
+      console.warn('[text-to-speech] Watchdog timeout — forcing end after', WATCHDOG_TIMEOUT_MS, 'ms');
+      speaking = false;
+      clearKeepalive();
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      if (endCallback) {
+        endCallback(text);
+      }
+      resolve();
+    }, WATCHDOG_TIMEOUT_MS);
+  });
+
+  return Promise.race([speakPromise, watchdog]);
+}
+
+/**
+ * Chrome drops the `onend` event for long utterances (>~15s).
+ * Workaround: pulse pause/resume every 10s to keep the synth alive.
+ */
+function startKeepalive() {
+  clearKeepalive();
+  if (typeof window !== 'undefined' && window.speechSynthesis) {
+    keepaliveTimer = setInterval(() => {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }
+    }, KEEPALIVE_INTERVAL_MS);
+  }
+}
+
+function clearKeepalive() {
+  if (keepaliveTimer) {
+    clearInterval(keepaliveTimer);
+    keepaliveTimer = null;
+  }
 }
 
 /**

@@ -13,6 +13,11 @@
 // DOM element references (initialized in initUI)
 let elements = {};
 
+// Callbacks
+let apiKeySubmitCallback = null;
+let clearHistoryCallback = null;
+let providerChangeCallback = null;
+
 // Emotion emoji mapping
 const EMOTION_EMOJIS = {
   calm: '😌',
@@ -48,7 +53,16 @@ export function initUI() {
     emotionConfidence: document.getElementById('emotion-confidence'),
     responseArea: document.getElementById('response'),
     textInput: document.getElementById('text-input'),
-    submitButton: document.getElementById('submit-button')
+    submitButton: document.getElementById('submit-button'),
+    apiKeyInput: document.getElementById('api-key-input'),
+    saveApiKeyButton: document.getElementById('save-api-key'),
+    apiStatus: document.getElementById('api-status'),
+    conversationHistory: document.getElementById('conversation-history'),
+    clearHistoryButton: document.getElementById('clear-history'),
+    providerSelect: document.getElementById('provider-select'),
+    customProviderFields: document.getElementById('custom-provider-fields'),
+    customEndpoint: document.getElementById('custom-endpoint'),
+    customModel: document.getElementById('custom-model')
   };
   
   // Verify all elements exist
@@ -58,6 +72,37 @@ export function initUI() {
   
   if (missing.length > 0) {
     console.warn('[UI] Missing elements:', missing);
+  }
+  
+  // Set up API key save button
+  if (elements.saveApiKeyButton && elements.apiKeyInput) {
+    elements.saveApiKeyButton.addEventListener('click', () => {
+      const key = elements.apiKeyInput.value.trim();
+      if (key && apiKeySubmitCallback) {
+        apiKeySubmitCallback(key);
+        elements.apiKeyInput.value = ''; // Clear input for security
+      }
+    });
+  }
+  
+  // Set up clear history button
+  if (elements.clearHistoryButton) {
+    elements.clearHistoryButton.addEventListener('click', () => {
+      if (clearHistoryCallback) {
+        clearHistoryCallback();
+      }
+    });
+  }
+  
+  // Set up provider select
+  if (elements.providerSelect) {
+    elements.providerSelect.addEventListener('change', () => {
+      const value = elements.providerSelect.value;
+      toggleCustomFields(value === 'custom');
+      if (providerChangeCallback) {
+        providerChangeCallback(value);
+      }
+    });
   }
   
   // Set initial state
@@ -110,6 +155,10 @@ export function setTranscript(text, interim = false) {
     elements.transcriptArea.innerHTML = `${text}<span class="interim">...</span>`;
   } else {
     elements.transcriptArea.textContent = text;
+    // When final transcript is set, add to conversation history
+    if (text.trim()) {
+      addToHistory('user', text);
+    }
   }
 }
 
@@ -157,7 +206,58 @@ export function setResponse(text) {
   if (!elements.responseArea) return;
   
   elements.responseArea.textContent = text;
-  elements.responseArea.style.display = 'block';
+}
+
+/**
+ * Add a message to the conversation history
+ * @param {string} role - 'user' or 'dekel'
+ * @param {string} text - The message text
+ */
+export function addToHistory(role, text) {
+  if (!elements.conversationHistory) return;
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `chat-message ${role}`;
+  
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'chat-label';
+  labelSpan.textContent = role === 'user' ? 'You' : 'Dekel';
+  
+  const textSpan = document.createElement('span');
+  textSpan.className = 'chat-text';
+  textSpan.textContent = text;
+  
+  messageDiv.appendChild(labelSpan);
+  messageDiv.appendChild(textSpan);
+  
+  elements.conversationHistory.appendChild(messageDiv);
+  
+  // Auto-scroll to bottom
+  elements.conversationHistory.scrollTop = elements.conversationHistory.scrollHeight;
+}
+
+/**
+ * Clear the conversation history display
+ */
+export function clearConversationHistory() {
+  if (!elements.conversationHistory) return;
+  elements.conversationHistory.innerHTML = '';
+}
+
+/**
+ * Set the API configuration status
+ * @param {string} status - 'configured' or 'not_configured'
+ */
+export function setApiStatus(status) {
+  if (!elements.apiStatus) return;
+  
+  if (status === 'configured') {
+    elements.apiStatus.textContent = '✓ Configured';
+    elements.apiStatus.style.color = '#4CAF50';
+  } else {
+    elements.apiStatus.textContent = 'Not configured';
+    elements.apiStatus.style.color = '#9ca3af';
+  }
 }
 
 /**
@@ -195,6 +295,91 @@ export function onTextSubmit(callback) {
 }
 
 /**
+ * Register a callback for API key submission
+ * @param {Function} callback - Called with (apiKey: string)
+ */
+export function onApiKeySubmit(callback) {
+  apiKeySubmitCallback = callback;
+}
+
+/**
+ * Register a callback for clearing conversation history
+ * @param {Function} callback - Called when clear button is clicked
+ */
+export function onClearHistory(callback) {
+  clearHistoryCallback = callback;
+}
+
+/**
+ * Register a callback for provider dropdown changes
+ * @param {Function} callback - Called with (providerName: string)
+ */
+export function onProviderChange(callback) {
+  providerChangeCallback = callback;
+}
+
+/**
+ * Set the selected provider in the dropdown and toggle custom fields
+ * @param {string} name - Provider key ('openai'|'groq'|'custom')
+ */
+export function setProvider(name) {
+  if (elements.providerSelect) {
+    elements.providerSelect.value = name;
+    toggleCustomFields(name === 'custom');
+  }
+}
+
+/**
+ * Update the API key input placeholder text
+ * @param {string} placeholder - New placeholder text
+ */
+export function setApiKeyPlaceholder(placeholder) {
+  if (elements.apiKeyInput) {
+    elements.apiKeyInput.placeholder = placeholder;
+  }
+}
+
+/**
+ * Get the custom endpoint value
+ * @returns {string} Custom endpoint URL
+ */
+export function getCustomEndpoint() {
+  return elements.customEndpoint ? elements.customEndpoint.value.trim() : '';
+}
+
+/**
+ * Get the custom model value
+ * @returns {string} Custom model name
+ */
+export function getCustomModel() {
+  return elements.customModel ? elements.customModel.value.trim() : '';
+}
+
+/**
+ * Show or hide the custom provider fields
+ * @private
+ */
+function toggleCustomFields(show) {
+  if (elements.customProviderFields) {
+    elements.customProviderFields.style.display = show ? 'block' : 'none';
+  }
+}
+
+/**
+ * Set a custom status message with a specific color.
+ * Use this for one-off messages like "Reconnecting…" that don't
+ * correspond to a standard app state.
+ *
+ * @param {string} text - The status text to display
+ * @param {string} [color='#fff'] - CSS color for the text
+ */
+export function setStatusText(text, color = '#fff') {
+  if (!elements.status) return;
+  elements.status.textContent = text;
+  elements.status.style.color = color;
+}
+
+/**
  * Clear all dynamic content (transcript, emotion, response)
  */
 export function clearContent() {
@@ -206,7 +391,6 @@ export function clearContent() {
   }
   if (elements.responseArea) {
     elements.responseArea.textContent = '';
-    elements.responseArea.style.display = 'none';
   }
 }
 
@@ -215,9 +399,68 @@ export function clearContent() {
  * @param {string} message - Error message
  */
 export function showError(message) {
+  // Defensive: ensure button is reset to non-listening state
+  if (elements.talkButton) {
+    elements.talkButton.textContent = '🎤 Talk to Dekel';
+    elements.talkButton.classList.remove('listening');
+    elements.talkButton.disabled = false;
+  }
+
   if (elements.status) {
     elements.status.textContent = `⚠️ ${message}`;
     elements.status.style.color = '#F44336';
+  }
+}
+
+/**
+ * Show indicator of response source (LLM or fallback template)
+ * @param {string} source - 'llm' or 'fallback'
+ * @param {string} [reason] - Why fallback was used (error message)
+ */
+export function setResponseSource(source, reason) {
+  if (!elements.status) return;
+  
+  if (source === 'llm') {
+    elements.status.textContent = '🤖 Dekel responded (AI)';
+    elements.status.style.color = '#4CAF50';
+  } else {
+    const hint = reason ? ` — ${reason}` : '';
+    elements.status.textContent = `📝 Dekel responded (template${hint})`;
+    elements.status.style.color = '#FF9800';
+  }
+}
+
+/**
+ * Show a friendly message when speech recognition is unavailable,
+ * and guide the user to type instead.
+ * @param {string} [message] - Optional custom message
+ */
+export function showSpeechUnavailable(message) {
+  const fallbackMsg = message ||
+    '🎤 Speech unavailable — type your message below!';
+
+  // Defensive: ensure button is reset to non-listening state
+  if (elements.talkButton) {
+    elements.talkButton.textContent = '🎤 Talk to Dekel';
+    elements.talkButton.classList.remove('listening');
+    elements.talkButton.disabled = false;
+  }
+
+  // Show in the response area so it's prominent
+  if (elements.responseArea) {
+    elements.responseArea.textContent = fallbackMsg;
+  }
+
+  // Also update the status bar
+  if (elements.status) {
+    elements.status.textContent = fallbackMsg;
+    elements.status.style.color = '#FF9800';
+  }
+
+  // Focus the text input so the user knows where to type
+  if (elements.textInput) {
+    elements.textInput.focus();
+    elements.textInput.placeholder = 'Type your message here...';
   }
 }
 
@@ -225,11 +468,24 @@ export function showError(message) {
 export default {
   initUI,
   setStatus,
+  setStatusText,
   setTranscript,
   setEmotion,
   setResponse,
+  addToHistory,
+  clearConversationHistory,
+  setApiStatus,
   onTalkToggle,
   onTextSubmit,
+  onApiKeySubmit,
+  onClearHistory,
+  onProviderChange,
+  setProvider,
+  setApiKeyPlaceholder,
+  getCustomEndpoint,
+  getCustomModel,
   clearContent,
-  showError
+  showError,
+  setResponseSource,
+  showSpeechUnavailable
 };
