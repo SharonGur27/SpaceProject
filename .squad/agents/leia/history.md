@@ -140,3 +140,59 @@
 **Pattern:** Error display functions in ui.js should always ensure the button is in a clickable, non-listening state. Defense in depth: both the caller (app.js) and the UI function (ui.js) reset the button.
 
 **Tests:** All 188 tests passing after fix.
+
+### 2026-04-10 — STT Reliability Improvements (Backoff, Retry, Feedback)
+
+**Problem:** Sharon reported speech recognition "sometimes works and sometimes doesn't." Root causes identified:
+1. Fixed 300ms restart delay caused hammering of Google's speech servers after repeated restarts
+2. A single transient network error immediately showed "speech unavailable" with no retry
+3. Stale SpeechRecognition instances after errors caused unpredictable behavior in Chrome
+4. No silence detection — recognition could silently stall without user feedback
+5. No user feedback during reconnection — users saw nothing between "working" and "failed"
+
+**Improvements (speech-to-text.js):**
+- **Exponential backoff:** Restart delay grows from 300ms → 5s (1.5× multiplier, capped). Resets to 300ms on successful results.
+- **Network retry:** 3 attempts for transient errors (network, audio-capture) before reporting failure. Previously 1 error = immediate death.
+- **Fresh instances:** New SpeechRecognition object created on every restart, not just on initial start(). Chrome has bugs with reused instances after errors.
+- **Silence timeout:** 15-second timer restarts recognition proactively if no results arrive. Catches silent connection drops.
+- **onStatusChange callback:** New API — notifies the app with `{ state: 'reconnecting'|'failed', attempt, maxAttempts, reason }` so UI can show appropriate feedback.
+- **Diagnostic logging:** All console messages include retry counts, timing info, and restart numbers.
+
+**Improvements (app.js):**
+- Wired `stt.onStatusChange()` to show "🔄 Reconnecting speech…" during retries
+- Simplified error handler — network errors only reach it after retries are exhausted
+
+**Improvements (ui.js):**
+- Added `setStatusText(text, color)` for custom one-off status messages (not tied to standard states)
+
+**Tests:** Updated network error test to verify retry behavior (4 errors needed to trigger callback). All 188 tests passing.
+
+**Key insight:** The Web Speech API sends audio to Google's servers. It's fundamentally network-dependent. Most "intermittent failures" are transient network glitches that resolve on retry. The old code treated every error as fatal.
+
+### 2026-04-10 — Speech Recognition Second-Session Failure Fix
+
+**Bug:** Speech recognition worked on first Talk press, but after stopping and pressing Talk again, STT started but produced no words. 100% reproducible.
+
+**Root causes identified (4 interacting issues):**
+
+1. **Chrome TTS `onend` dropout:** For long utterances (>15s), Chrome drops the `onend` event entirely. `tts.speak()` Promise never resolves, `processTranscript` hangs, button stays disabled at 'speaking' — user can never press Talk again.
+
+2. **Stale STT `onend` state corruption:** `stt.stop()` fires `recognition.stop()` which triggers `onend` asynchronously. If the old `onend` fires after a new `stt.start()` has set `isListening = true`, it overwrites it to `false`, breaking the new session.
+
+3. **processTranscript error leaves status stuck:** If brain or TTS throws, the catch block set status to 'ready' — but only in the catch. If TTS hung (cause #1), status stayed at 'speaking' forever.
+
+4. **getUserMedia + SpeechRecognition mic contention:** On second call, Chrome briefly conflicts between the new getUserMedia stream and SpeechRecognition's internal mic access.
+
+**Fixes applied:**
+
+- **`text-to-speech.js`:** Added 30s watchdog timeout via `Promise.race()` that force-resolves `speak()` and calls `speechSynthesis.cancel()`. Added Chrome keepalive workaround (`speechSynthesis.pause(); speechSynthesis.resume()` every 10s during speech). Used `settleOnce` pattern to prevent double-resolution of the Promise.
+
+- **`speech-to-text.js`:** Added `sessionId` counter, incremented on each `start()`. All event handlers (`onresult`, `onend`, `onerror`) capture their session's ID in closure and ignore events if it doesn't match the current `sessionId`. Auto-restart `setTimeout` also checks before proceeding.
+
+- **`app.js` `stopListening()`:** Moved `ui.setStatus('ready')` into the `finally` block as a guaranteed backstop — the button can never get permanently stuck regardless of what fails.
+
+- **`app.js` `startListening()`:** Added 100ms delay between `mic.start()` and `stt.start()` to avoid mic contention. Added detailed console logging (app isListening state, audioContext state) for future debugging.
+
+**Tests:** All 188 tests passing after fix.
+
+**Key insight:** Browser speech APIs have multiple async race conditions that only manifest on the second use cycle. The combination of stale event handlers, Chrome-specific TTS bugs, and mic resource contention creates a "works once, fails twice" pattern that requires defense-in-depth fixes across all three modules.
