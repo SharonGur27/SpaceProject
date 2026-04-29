@@ -23,6 +23,7 @@ const LOG_PREFIX = '[Whisper-STT]';
 let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
+let whisperLanguage = 'en';      // Language hint for Whisper transcription
 
 // Callback storage
 let finalResultCallback = null;
@@ -189,7 +190,7 @@ async function transcribeWithWhisper(audioBlob, mimeType) {
   const formData = new FormData();
   formData.append('file', audioBlob, fileName);
   formData.append('model', WHISPER_MODEL);
-  formData.append('language', 'en');
+  formData.append('language', whisperLanguage);
   formData.append('response_format', 'json');
 
   console.log(LOG_PREFIX, `Sending ${(audioBlob.size / 1024).toFixed(1)} KB to Whisper (${WHISPER_MODEL})…`);
@@ -277,12 +278,22 @@ function fireError(err) {
 
 // ── Exports ────────────────────────────────────────────────────────
 
+/**
+ * Set the language for Whisper transcription.
+ * @param {'en'|'he'} lang
+ */
+function setLanguage(lang) {
+  whisperLanguage = lang === 'he' ? 'he' : 'en';
+  console.log(LOG_PREFIX, 'Language set to:', whisperLanguage);
+}
+
 export default {
   start,
   stop,
   onFinalResult,
   onError,
-  isSupported
+  isSupported,
+  setLanguage
 };
 
 export {
@@ -290,5 +301,6 @@ export {
   stop,
   onFinalResult,
   onError,
-  isSupported
+  isSupported,
+  setLanguage
 };

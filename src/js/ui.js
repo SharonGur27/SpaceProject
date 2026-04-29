@@ -12,6 +12,35 @@
 
 // DOM element references (initialized in initUI)
 let elements = {};
+let currentLanguage = 'en';
+
+// Localized UI text for dynamic elements
+const UI_TEXT = {
+  en: {
+    ready: 'Ready to listen',
+    listening: 'Listening...',
+    processing: 'Thinking...',
+    speaking: 'Speaking...',
+    talkButton: '🎤 Talk to Dekel',
+    stopButton: '🛑 Stop',
+    respondedAI: '🤖 Dekel responded (AI)',
+    respondedTemplate: '📝 Dekel responded (template',
+    speechUnavailable: '🎤 Speech unavailable — type your message below!',
+    typePlaceholder: 'Type your message here...'
+  },
+  he: {
+    ready: 'מוכן להאזין',
+    listening: 'מאזין...',
+    processing: 'חושב...',
+    speaking: 'מדבר...',
+    talkButton: '🎤 דבר עם דקל',
+    stopButton: '🛑 עצור',
+    respondedAI: '🤖 דקל הגיב (בינה מלאכותית)',
+    respondedTemplate: '📝 דקל הגיב (תבנית',
+    speechUnavailable: '🎤 זיהוי דיבור לא זמין — הקלד את ההודעה שלך למטה!',
+    typePlaceholder: 'הקלד את ההודעה שלך כאן...'
+  }
+};
 
 // Callbacks
 let apiKeySubmitCallback = null;
@@ -118,11 +147,12 @@ export function initUI() {
 export function setStatus(status) {
   if (!elements.status) return;
   
+  const strings = UI_TEXT[currentLanguage] || UI_TEXT.en;
   const statusText = {
-    ready: 'Ready to listen',
-    listening: 'Listening...',
-    processing: 'Thinking...',
-    speaking: 'Speaking...'
+    ready: strings.ready,
+    listening: strings.listening,
+    processing: strings.processing,
+    speaking: strings.speaking
   };
   
   elements.status.textContent = statusText[status] || status;
@@ -131,10 +161,10 @@ export function setStatus(status) {
   // Update button state
   if (elements.talkButton) {
     if (status === 'listening') {
-      elements.talkButton.textContent = '🛑 Stop';
+      elements.talkButton.textContent = strings.stopButton;
       elements.talkButton.classList.add('listening');
     } else {
-      elements.talkButton.textContent = '🎤 Talk to Dekel';
+      elements.talkButton.textContent = strings.talkButton;
       elements.talkButton.classList.remove('listening');
     }
     
@@ -399,9 +429,10 @@ export function clearContent() {
  * @param {string} message - Error message
  */
 export function showError(message) {
+  const strings = UI_TEXT[currentLanguage] || UI_TEXT.en;
   // Defensive: ensure button is reset to non-listening state
   if (elements.talkButton) {
-    elements.talkButton.textContent = '🎤 Talk to Dekel';
+    elements.talkButton.textContent = strings.talkButton;
     elements.talkButton.classList.remove('listening');
     elements.talkButton.disabled = false;
   }
@@ -419,13 +450,14 @@ export function showError(message) {
  */
 export function setResponseSource(source, reason) {
   if (!elements.status) return;
+  const strings = UI_TEXT[currentLanguage] || UI_TEXT.en;
   
   if (source === 'llm') {
-    elements.status.textContent = '🤖 Dekel responded (AI)';
+    elements.status.textContent = strings.respondedAI;
     elements.status.style.color = '#4CAF50';
   } else {
     const hint = reason ? ` — ${reason}` : '';
-    elements.status.textContent = `📝 Dekel responded (template${hint})`;
+    elements.status.textContent = `${strings.respondedTemplate}${hint})`;
     elements.status.style.color = '#FF9800';
   }
 }
@@ -436,12 +468,12 @@ export function setResponseSource(source, reason) {
  * @param {string} [message] - Optional custom message
  */
 export function showSpeechUnavailable(message) {
-  const fallbackMsg = message ||
-    '🎤 Speech unavailable — type your message below!';
+  const strings = UI_TEXT[currentLanguage] || UI_TEXT.en;
+  const fallbackMsg = message || strings.speechUnavailable;
 
   // Defensive: ensure button is reset to non-listening state
   if (elements.talkButton) {
-    elements.talkButton.textContent = '🎤 Talk to Dekel';
+    elements.talkButton.textContent = strings.talkButton;
     elements.talkButton.classList.remove('listening');
     elements.talkButton.disabled = false;
   }
@@ -460,8 +492,16 @@ export function showSpeechUnavailable(message) {
   // Focus the text input so the user knows where to type
   if (elements.textInput) {
     elements.textInput.focus();
-    elements.textInput.placeholder = 'Type your message here...';
+    elements.textInput.placeholder = strings.typePlaceholder;
   }
+}
+
+/**
+ * Set the UI language for dynamically generated text.
+ * @param {'en'|'he'} lang
+ */
+export function setLanguage(lang) {
+  currentLanguage = lang;
 }
 
 // Export both default and named
@@ -487,5 +527,6 @@ export default {
   clearContent,
   showError,
   setResponseSource,
-  showSpeechUnavailable
+  showSpeechUnavailable,
+  setLanguage
 };

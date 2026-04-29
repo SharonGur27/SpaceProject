@@ -25,6 +25,69 @@ import * as ui from './ui.js';
 import * as engine from './conversation-engine.js';
 import * as whisperStt from './whisper-stt.js';
 
+// ── UI Localization ─────────────────────────────────────────────────
+const UI_STRINGS = {
+  en: {
+    title: '🚀 Dekel — Your Space Companion',
+    talkButton: '🎤 Talk to Dekel',
+    youSaid: 'You said:',
+    dekelSays: 'Dekel says:',
+    placeholder: 'Or type your message here...',
+    send: 'Send',
+    history: 'Conversation History',
+    clear: 'Clear',
+    footer: 'Built with care for astronauts everywhere 🌌'
+  },
+  he: {
+    title: '🚀 דקל — המלווה שלך בחלל',
+    talkButton: '🎤 דבר עם דקל',
+    youSaid: 'אמרת:',
+    dekelSays: 'דקל אומר:',
+    placeholder: 'או הקלד את ההודעה שלך כאן...',
+    send: 'שלח',
+    history: 'היסטוריית שיחה',
+    clear: 'נקה',
+    footer: 'נבנה באהבה עבור אסטרונאוטים בכל מקום 🌌'
+  }
+};
+
+function applyLanguageToUI(lang) {
+  const strings = UI_STRINGS[lang] || UI_STRINGS.en;
+  const dir = lang === 'he' ? 'rtl' : 'ltr';
+  
+  document.documentElement.setAttribute('dir', dir);
+  document.documentElement.setAttribute('lang', lang);
+  
+  const header = document.querySelector('header h1');
+  if (header) header.innerHTML = lang === 'he' 
+    ? '🚀 דקל <span class="subtitle">— המלווה שלך בחלל</span>'
+    : '🚀 Dekel <span class="subtitle">— Your Space Companion</span>';
+
+  const talkBtn = document.getElementById('talk-button');
+  if (talkBtn) talkBtn.textContent = strings.talkButton;
+
+  const youSaidLabel = document.querySelector('.transcript-section .box-label');
+  if (youSaidLabel) youSaidLabel.textContent = strings.youSaid;
+
+  const dekelSaysLabel = document.querySelector('.response-section .box-label');
+  if (dekelSaysLabel) dekelSaysLabel.textContent = strings.dekelSays;
+
+  const textInput = document.getElementById('text-input');
+  if (textInput) textInput.placeholder = strings.placeholder;
+
+  const sendBtn = document.getElementById('submit-button');
+  if (sendBtn) sendBtn.textContent = strings.send;
+
+  const historyHeader = document.querySelector('.conversation-header h2');
+  if (historyHeader) historyHeader.textContent = strings.history;
+
+  const clearBtn = document.getElementById('clear-history');
+  if (clearBtn) clearBtn.textContent = strings.clear;
+
+  const footer = document.querySelector('footer p');
+  if (footer) footer.textContent = strings.footer;
+}
+
 // App state
 let isListening = false;
 let currentTranscript = '';
@@ -59,6 +122,42 @@ async function init() {
     engine.configure({ apiKey: storedKey });
     ui.setApiStatus('configured');
     console.log('[App] Restored API key from session');
+  }
+
+  // Restore psychologist gender preference
+  const storedGender = localStorage.getItem('dekel-gender') || 'male';
+  engine.setPsychologistGender(storedGender);
+  tts.setVoiceGender(storedGender);
+  const genderSelect = document.getElementById('gender-select');
+  if (genderSelect) {
+    genderSelect.value = storedGender;
+    genderSelect.addEventListener('change', (e) => {
+      engine.setPsychologistGender(e.target.value);
+      tts.setVoiceGender(e.target.value);
+      localStorage.setItem('dekel-gender', e.target.value);
+    });
+  }
+
+  // Restore language preference
+  const storedLang = localStorage.getItem('dekel-language') || 'en';
+  engine.setLanguage(storedLang);
+  tts.setVoiceLanguage(storedLang);
+  stt.setLanguage(storedLang);
+  whisperStt.setLanguage(storedLang);
+  ui.setLanguage(storedLang);
+  applyLanguageToUI(storedLang);
+  const languageSelect = document.getElementById('language-select');
+  if (languageSelect) {
+    languageSelect.value = storedLang;
+    languageSelect.addEventListener('change', (e) => {
+      engine.setLanguage(e.target.value);
+      tts.setVoiceLanguage(e.target.value);
+      stt.setLanguage(e.target.value);
+      whisperStt.setLanguage(e.target.value);
+      ui.setLanguage(e.target.value);
+      applyLanguageToUI(e.target.value);
+      localStorage.setItem('dekel-language', e.target.value);
+    });
   }
   
   // ── STT strategy selection ─────────────────────────────────────
@@ -150,6 +249,7 @@ function setupEventHandlers() {
     console.log('[App] Clearing conversation history...');
     engine.clearHistory();
     ui.clearConversationHistory();
+    emotionDetector.resetState();
   });
   
   // Mic events
