@@ -17,7 +17,7 @@
  * @module emotion-detector
  */
 
-import { predictFromFeatures } from './emotion-fallback.js';
+import { predictFromFeatures, resetState as resetFallbackState } from './emotion-fallback.js';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -109,6 +109,13 @@ export function isModelLoaded() {
  */
 export function getEmotionLabels() {
   return [...EMOTION_LABELS];
+}
+
+/**
+ * Reset temporal state in the fallback classifier (call when starting a new conversation).
+ */
+export function resetState() {
+  resetFallbackState();
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────────

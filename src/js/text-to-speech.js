@@ -43,6 +43,8 @@ let speaking = false;           // Whether Dekel is currently speaking
 let selectedVoice = null;       // The voice we've chosen to use
 let voicesLoaded = false;       // Whether the browser's voice list is ready
 let keepaliveTimer = null;      // Chrome pause/resume keepalive interval
+let preferredGender = 'male';   // Preferred voice gender ('male' | 'female')
+let preferredLanguage = 'en';   // Preferred language ('en' | 'he')
 
 // Callback storage
 let startCallback = null;
@@ -50,39 +52,76 @@ let endCallback = null;
 
 // ── Voice Selection ────────────────────────────────────────────────
 
+// Common female/male voice name keywords (varies by OS/browser)
+const FEMALE_KEYWORDS = ['female', 'woman', 'zira', 'hazel', 'susan', 'samantha', 'karen', 'moira', 'fiona', 'tessa', 'victoria', 'allison', 'ava', 'jenny', 'aria', 'sara', 'sonia'];
+const MALE_KEYWORDS = ['male', 'man', 'david', 'mark', 'james', 'daniel', 'george', 'ryan', 'guy', 'thomas', 'richard', 'alex', 'christopher', 'eric', 'roger'];
+
 /**
- * Pick the best available voice for Dekel.
+ * Pick the best available voice for Dekel based on language and gender preference.
  *
- * We prefer natural-sounding English voices. The browser offers many voices
- * but some sound robotic. We look for ones with "Natural" or "Google" in
- * the name, or fall back to any English voice.
+ * Filters by language first, then by gender within that language.
+ * Falls back gracefully if no perfect match is found.
  */
 function selectBestVoice() {
   const voices = window.speechSynthesis.getVoices();
 
   if (voices.length === 0) return;
 
-  // Filter to English voices
-  const englishVoices = voices.filter(v =>
-    v.lang.startsWith('en')
-  );
+  // Filter by preferred language
+  const langPrefix = preferredLanguage === 'he' ? 'he' : 'en';
+  const langVoices = voices.filter(v => v.lang.startsWith(langPrefix));
 
-  if (englishVoices.length === 0) {
-    // No English voices? Use whatever is available
-    selectedVoice = voices[0];
+  if (langVoices.length === 0) {
+    // No voices for the preferred language — fall back to any available
+    const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+    selectedVoice = englishVoices[0] || voices[0];
+    console.log('[text-to-speech] No', langPrefix, 'voices found, falling back to:', selectedVoice.name);
     return;
   }
 
-  // Prefer voices that sound natural (these names vary by browser/OS)
-  const preferred = englishVoices.find(v =>
+  // Try to match gender using voice name keywords
+  const genderKeywords = preferredGender === 'female' ? FEMALE_KEYWORDS : MALE_KEYWORDS;
+  const genderMatches = langVoices.filter(v => {
+    const nameLower = v.name.toLowerCase();
+    return genderKeywords.some(kw => nameLower.includes(kw));
+  });
+
+  // Among gender matches, prefer natural-sounding voices
+  const candidates = genderMatches.length > 0 ? genderMatches : langVoices;
+
+  const preferred = candidates.find(v =>
     v.name.includes('Natural') ||
     v.name.includes('Google') ||
-    v.name.includes('Microsoft') && v.name.includes('Online')
+    (v.name.includes('Microsoft') && v.name.includes('Online'))
   );
 
-  selectedVoice = preferred || englishVoices[0];
+  selectedVoice = preferred || candidates[0];
 
-  console.log('[text-to-speech] Selected voice:', selectedVoice.name);
+  console.log('[text-to-speech] Selected voice:', selectedVoice.name, '(lang:', preferredLanguage, ', gender:', preferredGender + ')');
+}
+
+/**
+ * Set the preferred voice gender and re-select the voice.
+ * @param {'male'|'female'} gender
+ */
+function setVoiceGender(gender) {
+  if (gender === 'male' || gender === 'female') {
+    preferredGender = gender;
+    selectBestVoice();
+    console.log('[text-to-speech] Voice gender set to:', gender);
+  }
+}
+
+/**
+ * Set the preferred voice language and re-select the voice.
+ * @param {'en'|'he'} lang
+ */
+function setVoiceLanguage(lang) {
+  if (lang === 'en' || lang === 'he') {
+    preferredLanguage = lang;
+    selectBestVoice();
+    console.log('[text-to-speech] Voice language set to:', lang);
+  }
 }
 
 // Listen for voices to load — some browsers load them asynchronously
@@ -288,7 +327,9 @@ export default {
   stop,
   isSpeaking,
   onStart,
-  onEnd
+  onEnd,
+  setVoiceGender,
+  setVoiceLanguage
 };
 
 export {
@@ -296,5 +337,7 @@ export {
   stop,
   isSpeaking,
   onStart,
-  onEnd
+  onEnd,
+  setVoiceGender,
+  setVoiceLanguage
 };

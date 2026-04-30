@@ -33,6 +33,10 @@ const DEFAULT_NORM_STATS = {
   speechRate:       { mean: 3.5,   std: 1.5  },  // peaks per second
 };
 
+// Adaptive calibration: collect real feature values for the first N emissions
+// then blend user stats with defaults for more accurate z-scores
+const CALIBRATION_FRAMES = 6;  // ~3 seconds of voiced audio
+
 // ── Module constants ────────────────────────────────────────────────────────
 const FFT_SIZE = 2048;
 
@@ -76,6 +80,10 @@ let energyEnvelope = [];
 let latestFeatures = null;     // Float32Array(6) | null
 let callbacks = [];            // registered onFeaturesReady listeners
 let normStats = { ...DEFAULT_NORM_STATS };
+
+// Adaptive calibration state
+let calibrationHistory = [];   // raw feature arrays collected during calibration
+let isCalibrated = false;
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -198,6 +206,17 @@ function _emitFeatures() {
   const meanCentroid = _mean(spectralCentroidSamples);
   const meanZCR   = _mean(zcrSamples);
   const speechRate = _estimateSpeechRate(energyEnvelope);
+
+  // ── Adaptive calibration ─────────────────────────────────────────────
+  // Collect raw features for the first few emissions, then update normStats
+  if (!isCalibrated) {
+    calibrationHistory.push([meanPitch, pitchVar, meanEnergy, meanCentroid, meanZCR, speechRate]);
+    if (calibrationHistory.length >= CALIBRATION_FRAMES) {
+      _applyCalibration();
+      isCalibrated = true;
+      console.log('[audio-features] Adaptive calibration complete:', normStats);
+    }
+  }
 
   // ── Z-score normalisation ────────────────────────────────────────────
   // z = (x - μ) / σ   —   centres features around 0 with unit variance
@@ -411,6 +430,29 @@ function _movingAverage(arr, windowSize) {
   return result;
 }
 
+// ── Adaptive calibration ────────────────────────────────────────────────────
+
+/**
+ * Blend observed user statistics with defaults to produce more accurate normalization.
+ * Uses a 50/50 mix of user data and defaults to prevent overfitting to a small sample.
+ */
+function _applyCalibration() {
+  const featureNames = ['meanPitch', 'pitchVariance', 'energy', 'spectralCentroid', 'zeroCrossingRate', 'speechRate'];
+  const BLEND = 0.5;  // 50% user data, 50% defaults
+
+  for (let f = 0; f < 6; f++) {
+    const values = calibrationHistory.map(row => row[f]);
+    const userMean = _mean(values);
+    const userStd = values.length > 1 ? _stddev(values) : DEFAULT_NORM_STATS[featureNames[f]].std;
+
+    const defaultStat = DEFAULT_NORM_STATS[featureNames[f]];
+    normStats[featureNames[f]] = {
+      mean: BLEND * userMean + (1 - BLEND) * defaultStat.mean,
+      std: Math.max(BLEND * userStd + (1 - BLEND) * defaultStat.std, defaultStat.std * 0.3),
+    };
+  }
+}
+
 // ── Buffer management ───────────────────────────────────────────────────────
 
 function _resetBuffers() {
@@ -420,6 +462,8 @@ function _resetBuffers() {
   zcrSamples = [];
   energyEnvelope = [];
   latestFeatures = null;
+  calibrationHistory = [];
+  isCalibrated = false;
 }
 
 /**

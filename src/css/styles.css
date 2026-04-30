@@ -394,6 +394,10 @@ h2 {
   font-style: italic;
 }
 
+[lang="he"] .transcript-box:empty::before {
+  content: 'המילים שלך יופיעו כאן...';
+}
+
 .interim {
   color: #9ca3af;
   font-style: italic;
@@ -420,6 +424,11 @@ h2 {
   font-size: 0.75rem;
   line-height: 1;
   z-index: 2;
+}
+
+[dir="rtl"] .emotion-badge {
+  right: auto;
+  left: 0.5rem;
 }
 
 .emotion-emoji {
@@ -456,6 +465,10 @@ h2 {
   color: #6b7280;
   font-style: italic;
   font-weight: 400;
+}
+
+[lang="he"] .response-box:empty::before {
+  content: 'התגובה של דקל תופיע כאן...';
 }
 
 /* === Conversation History === */
@@ -507,6 +520,10 @@ h2 {
   text-align: center;
   display: block;
   padding: 2rem;
+}
+
+[lang="he"] .conversation-history:empty::before {
+  content: 'השיחה שלך תופיע כאן...';
 }
 
 .chat-message {

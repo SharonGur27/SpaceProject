@@ -31,6 +31,7 @@ let recognition = null;          // The SpeechRecognition instance
 let isListening = false;         // Whether we're actively listening
 let shouldRestart = false;       // Whether to auto-restart after the browser stops
 let sessionId = 0;               // Incremented on each start(); stale handlers check this
+let sttLanguage = 'en-US';       // Language for speech recognition
 
 // Callback storage
 let interimResultCallback = null;
@@ -211,7 +212,7 @@ function createAndStartRecognition() {
   recognition = new SpeechRecognition();
 
   // ── Configuration ────────────────────────────────────────────
-  recognition.lang = 'en-US';          // Language: US English
+  recognition.lang = sttLanguage;          // Language for recognition
   recognition.continuous = true;       // Don't stop after one sentence
   recognition.interimResults = true;   // Show partial results as user speaks
   recognition.maxAlternatives = 1;     // We only need the best guess
@@ -396,6 +397,15 @@ function clearSilenceTimer() {
 
 // ── Exports ────────────────────────────────────────────────────────
 
+/**
+ * Set the language for speech recognition.
+ * @param {'en'|'he'} lang
+ */
+function setLanguage(lang) {
+  sttLanguage = lang === 'he' ? 'he-IL' : 'en-US';
+  console.log('[speech-to-text] Language set to:', sttLanguage);
+}
+
 export default {
   start,
   stop,
@@ -404,7 +414,8 @@ export default {
   onFinalResult,
   onError,
   onStatusChange,
-  isSupported
+  isSupported,
+  setLanguage
 };
 
 export {
@@ -415,5 +426,6 @@ export {
   onFinalResult,
   onError,
   onStatusChange,
-  isSupported
+  isSupported,
+  setLanguage
 };
